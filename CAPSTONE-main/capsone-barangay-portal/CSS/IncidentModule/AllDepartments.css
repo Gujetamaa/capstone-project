@@ -1,0 +1,369 @@
+/*
+
+.main-container-all-department{
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: auto;
+ background-color: #F0F2F8; 
+  padding-left:30px;
+  padding-right:30px;
+  padding-bottom:30px;
+  padding-top: 150px;
+  margin-left: 3rem; 
+  gap: 40px;
+    
+}
+*/
+
+
+.main-container-all-department{
+ width: 100%;
+  background-color: #F0F2F8;
+  padding: 150px 2rem 2rem 2rem;
+  box-sizing: border-box;
+  overflow: hidden;
+  height: auto;
+  margin-left: 1rem; 
+  gap: 50px;
+  
+}
+
+
+.incident-layout-wrapper {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 2rem;
+  width: 100%;
+  box-sizing: border-box;
+ 
+}
+
+
+.incident-main-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 100%; /* Prevent overflow */
+  overflow-x: hidden; /* Remove horizontal scroll */
+  padding: 2rem;
+  border: 2px solid rgba(36, 53, 76, 0.7);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  border-radius: 1rem;
+  background-color: #ffffff;
+   overflow-y: visible; /* or auto if needed */
+}
+
+
+.main-section-all-department {
+    flex: 1; /* Makes it take up remaining space */
+    display: flex; /* Ensures proper alignment */
+    flex-direction: column;
+    padding: 0;
+    margin: 0; /* Remove default margin */
+    overflow: auto; /* Allow scrolling if content overflows */
+    width: 100%;
+    height: 100%; /* Full height */
+    margin-top: 2rem;
+    max-height: 70%;
+    border: 2px solid rgba(36, 53, 76, 0.7);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+   background-color: #ffffff;
+   border-radius: 6px;
+    max-height: 500px; /* Set your preferred limit */
+  overflow-y: auto;
+}
+
+.main-section-all-department table {
+   width: 100%; 
+    border-collapse: collapse; 
+}
+
+.main-section-all-department td{
+ padding: 1rem; 
+  text-align: center; 
+  border-bottom: 2px solid #ddd;
+color: rgb(44, 42, 42);
+  font-weight: normal;
+
+}
+
+.main-section-all-department  th{
+ padding: 1rem; 
+  text-align: left; 
+  border-bottom: 2px solid #ddd;
+  color: #FFFFFF;
+  text-align: center;
+}
+
+
+.main-section-all-department thead {
+ position: sticky;
+  top: 0;
+  background-color: #214666; /* Ensures it's visible when scrolled */
+  z-index: 10; /* Ensures it stays above other content */
+  box-shadow: 0px 2px 2px rgba(0, 0, 0, 0.1); /* Simulates a fixed border */
+  height: 80px;
+}
+
+
+
+
+  .section-2-all-department{
+     display: flex;
+    gap: 20px;
+    padding: 0;
+    margin-top: 5px;
+  }
+
+
+  .all-departments-filter{
+     padding: 8px;
+    width: 100%;
+    max-width: 400px;
+    margin-top: 10px;
+     border: 1px solid rgba(36, 53, 76, 0.7);
+    border-radius: 5px;
+    color: #000000;
+    text-align: left;
+  }
+
+  .all-departments-filter option {
+    color: rgba(0, 0, 0, 0.4); 
+  }
+
+  .all-departments-filter:focus {
+    border-color: #f49028;
+    outline: none;
+    box-shadow: 0 0 5px rgba(244, 144, 40, 0.5);
+  }
+
+
+
+
+
+  .status-dropdown-all-department {
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-weight: bold;
+    border: none;
+    cursor: pointer;
+    text-align: center;
+  }
+  
+  .pending {
+    background-color: #d4d64f;
+    color: white;
+    font-size: 15px;
+    
+  }
+  
+  .resolved {
+    background-color: #66c47a;
+    color: white;
+    
+  }
+  
+  .settled {
+    background-color: #1e5128;
+    color: white;
+    font-size: 15px;
+  }
+  
+  .archived {
+    background-color: #7f7f7f;
+    color: white;
+    font-size: 15px;
+  }
+
+  .status-badge-all-department {
+    padding: 8px 12px;            
+    border-radius: 5px;          
+    font-size: 13px;              
+    color: white;                
+    display: inline-block;        
+    text-transform: capitalize;   
+    text-align: center;    
+    width: 100px;       
+}
+
+
+
+.titlesection-all-department {
+    display: flex;
+}
+
+.titlesection-all-department p {
+  font-size: 30px;
+    font-weight: bold;
+    color: #2C3E50;
+    margin-top: 2rem;
+}
+
+.table-section-all-department { 
+    display: flex;
+    justify-content: center;
+    display: flex;
+    align-items: center;
+}
+
+
+.table-section-all-department table {
+    width: 100%; /* Ensures the table spans the full width */
+    border-collapse: collapse; /* Removes unnecessary spacing between table cells */
+}
+
+.table-section-all-department  td {
+    padding: 1rem; 
+    text-align: center; 
+    border-bottom: 2px solid #ddd;
+    color: grey;
+    font-weight: lighter;
+}
+
+
+
+
+.table-section-all-department  th {
+    padding: 1rem; 
+    text-align: left; 
+    border-bottom: 2px solid #ddd;
+    color: grey;
+    text-align: center;
+}
+
+.table-section-all-department thead {
+    position: sticky;
+    top: 0;
+    background-color: rgb(232, 228, 228); /* Ensures it's visible when scrolled */
+    z-index: 10; /* Ensures it stays above other content */
+    box-shadow: 0px 2px 2px rgba(0, 0, 0, 0.1); /* Simulates a fixed border */
+    height: 80px;
+}
+
+
+
+.redirection-section-departments {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 2rem auto;
+    width: fit-content;
+    padding: 10px;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+    background: #f8f8f8;
+    gap: 5px;
+  }
+  
+  .redirection-section-departments button {
+    padding: 4px 8px;
+    border: none;
+    background-color: #007bff;
+    color: white;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: 0.3s;
+  }
+  
+  .redirection-section-departments button:hover {
+    background-color: #0056b3;
+  }
+  
+  .redirection-section-departments button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+  }
+  
+  .redirection-section-departments .active {
+    background-color: #0056b3;
+    font-weight: bold;
+  }
+
+
+  .incidentmap-section-all-department {
+     flex: 1;
+  min-width: 300px;
+  background: #ffffff;
+  border: 2px solid rgba(36, 53, 76, 0.7);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-sizing: border-box;
+  height: fit-content;
+  }
+
+  
+.heatmap-container {
+  display: flex;
+  margin-top: 3rem;
+}
+
+.titlesection-all-department-heatmap {
+  display: flex;
+  margin-top: 2rem;
+}
+
+
+
+  
+
+
+  @keyframes slideIn {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+  
+  @keyframes slideOut {
+    from {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    to {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+  }
+  
+
+  
+  
+  .no-result-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    border: 2px solid #f3c3bf;
+    width: 500px;
+    border-radius: 1rem;
+    background-color: #fff;
+    margin-top: 5rem;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.03);
+   
+  }
+  
+
+  .no-result-icon {
+    width: 46px;
+    height: 46px;
+    margin-bottom: 0.5rem;
+    opacity: 0.75;
+  }
+
+  .no-results-department {
+    font-weight: bold;
+    font-size: 1.25rem;
+    color: #e7594e;
+  }
+  
+
+
+  

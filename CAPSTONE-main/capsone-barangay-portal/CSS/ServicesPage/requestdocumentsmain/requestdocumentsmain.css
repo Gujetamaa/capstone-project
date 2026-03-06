@@ -1,0 +1,702 @@
+
+
+.services-container-document {
+      height: 100%;
+    width: 100%;
+     /*background-image: url('/Images/bghome.jpg');*/
+}
+
+.headerpic-services {
+ position: relative;
+  height: 250px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgb(255, 255, 255);
+  font-size: 50px;
+  font-weight:bolder;
+  overflow: hidden; 
+    background: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)),
+              url('/Images/brgyheaderpic.JPG') no-repeat center center/cover;
+   background-position: center 55%; 
+}
+
+.services-main-container {
+  display: flex;
+  flex-direction: column;
+  background: #FFFFFF;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 2rem;
+  max-width: 1000px; /* or 90vw for flexible layout */
+  width: 100%;
+  margin: 5rem auto;
+}
+
+
+
+
+
+.documents-container{
+gap: 40px;
+display: flex;
+justify-content: center;
+align-items: center;
+}
+
+.documents-upper {
+padding-top: 30px;
+}
+
+.documents-lower {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+}
+
+.documents-container h1 {
+  color: #ece9e7;
+  font-size: 20px;
+}
+
+.documents-container-left{
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 50%;
+  height: 100%;
+}
+
+.documents-container-right{
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 50%;
+  height: 100%;
+
+
+}
+
+
+
+
+/*
+.documents-card {
+    flex: 1 1 calc(50% - 20px);
+ background: linear-gradient(to right, #1b3840, #214666, #2c5e73);
+    padding: 20px;
+    padding-left: 20px;
+    border: 1px solid rgba(44, 62, 80, 0.7);
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.142);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    /*height: 80px;*/
+/*    min-height: 80px; /* ensures a minimum but can grow */
+/*    height: auto;     /* let it expand */
+/*  margin-bottom: 20px;
+    margin-left: 20px;
+    display: flex;
+    gap: 55px;
+    align-items: center;
+    z-index: 10;
+    /*width: 350px;*/
+/*   width: 100%;   
+/*    max-width: 400px;
+    /*max-width: 90%; /* Responsive width */
+/*    text-align: center;
+    justify-content: center;
+}*/
+
+.documents-card {
+    flex: 1 1 auto; /* allow responsive growth */
+    background: linear-gradient(to right, #1b3840, #214666, #2c5e73);
+    padding: 20px;
+    border: 1px solid rgba(44, 62, 80, 0.7);
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.142);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    min-height: 80px; /* ensures a minimum but can grow */
+    height: auto;
+    margin-bottom: 20px;
+    display: flex;
+    gap: 30px;
+    align-items: center;
+    z-index: 10;
+    width: 100%;      /* take full width of parent */
+    max-width: none;  /* remove 400px cap so left & right behave equally */
+    text-align: center;
+    justify-content: center;
+}
+
+
+.documents-card h1 {
+      color: #FFFFFF;
+    font-weight: bolder;
+    font-size: 16px;
+}
+
+
+
+.documents-card:hover {
+  /* not sure why di gumagana to for permits and other docs
+  transform: scale(1.08) translateY(-10px);*/
+
+
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.444);
+  cursor: pointer;
+  z-index: 20;
+}
+
+
+.document-icon {
+  max-width: 100%;
+  height: 40px;
+  width: 40px;
+}
+
+.dropdown-container:hover .dropdown,
+.dropdown-container .dropdown:hover {
+    display: block;
+}
+
+.dropdown-container {
+    position: relative;
+    display: flex;
+    align-items: center; 
+    justify-content: center; 
+    flex-wrap: wrap; 
+    gap: 0;
+    padding-left: 0;
+    z-index: 20;
+}
+
+.dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: linear-gradient(to right, #3a5a63, #4b7088, #5e8ca3);
+
+    border: 1px solid rgba(44, 62, 80, 0.7); /* similar border */
+    border-radius: 10px; /* match card radius */
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2); /* deeper shadow for depth */
+    padding: 10px;
+    z-index: 100;
+    width: 100%;
+    height: 160px;
+    overflow-y: auto;
+}
+
+.dropdown p {
+    margin: 0;
+    padding: 10px 12px;
+    color: #f2f6fa; /* soft white */
+    font-size: 15px;
+    cursor: pointer;
+    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+    border-radius: 8px;
+}
+
+.dropdown p:hover {
+    background-color: rgba(255, 255, 255, 0.25); /* lighter hover effect */
+    color: #224e61; /* deep muted blue for contrast */
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+
+
+
+@keyframes fadeIn {
+from {
+    opacity: 0;
+    transform: translateY(-10px);
+}
+to {
+    opacity: 1;
+    transform: translateY(0);
+}
+}
+
+
+@media (max-width: 768px) {
+  .documents-card {
+    width: 90%; 
+    padding: 15px;
+    gap: 15px;
+  }
+
+  .documents-container {
+    padding: 20px;
+  }
+
+  .dropdown, .nested-dropdown {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .headerpic-services {
+    font-size: 24px; 
+  }
+
+  .documents-card {
+    width: 100%;
+    padding: 10px;
+    gap: 10px;
+  }
+}
+
+.disabled-card {
+  pointer-events: none;
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+
+/* for tooltip that they have to be logged in */
+
+/* Visually disables the card */
+.disabled-card {
+  pointer-events: none;
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Tooltip container */
+.tooltip-wrapper {
+  position: relative;
+ 
+}
+
+/* Tooltip text style */
+.tooltip-text {
+  visibility: hidden;
+  opacity: 0;
+  width: 220px;
+  background-color: #333;
+  color: #fff;
+  text-align: center;
+  border-radius: 6px;
+  padding: 6px 10px;
+  position: absolute;
+  z-index: 10;
+  bottom: 110%; /* Appears above the card */
+  left: 50%;
+  transform: translateX(-50%);
+  transition: opacity 0.3s ease-in-out;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+/* Show tooltip on hover */
+.tooltip-wrapper:hover .tooltip-text {
+  visibility: visible;
+  opacity: 1;
+}
+
+
+
+
+
+.documents-container-column {
+      margin-top: 20px;
+    display: block;
+    flex-wrap: wrap;
+    
+}
+
+.documents-container-column-other {
+     width: 380px;
+   display: flex;
+   justify-content: center;
+}
+
+.documents-card.dropdown-container {
+  flex-direction: row;
+  gap: 55px;
+  align-items: center;
+}
+.documents-card.dropdown-container {
+  align-items: center;
+}
+
+.documents-card.dropdown-container .document-icon,
+.documents-card.dropdown-container h1 {
+  display: flex;
+  align-items: center;
+}
+
+ .card-content-up {
+  display: flex;
+  align-items: center;
+  gap: 55px;
+  transform: translateY(-5px); /* move icon+text up inside the box */
+}
+
+
+.services-section-withbg {
+  position: relative;
+  height: 700px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.center-images {
+  position: relative;
+  width: 750px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Image styles */
+.background-services {
+  position: relative;
+  width: 750px;
+  z-index: 1;
+}
+
+.kap-services {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  width: 550px;
+}
+
+@keyframes fadeSlideInServices {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -70%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+.services-header {
+  position: absolute;
+  top: 15%; /* Adjust this to move up/down */
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3; /* Above the kapitan image */
+  width: 1200px;
+  text-align: center;
+  animation: fadeSlideInServices 1s ease-out forwards;
+}
+
+@keyframes slideDown {
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.services-title {
+    font-size: 2.5rem;
+  font-weight: bold;
+  color: #214666;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  animation: slideDown 1s ease forwards 0.3s;
+
+  transform: translateY(-50px);
+  opacity: 0;
+}
+
+.services-title::before,
+.services-title::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid #ccc;
+}
+
+.services-underline {
+  width: 100px;
+  height: 4px;
+  background-color: #DF7426; 
+  margin: 0.5rem auto 1.5rem auto;
+  border-radius: 5px;
+}
+
+
+.services-underline {
+  width: 100px;
+  height: 4px;
+  background-color: #DF7426; 
+  margin: 0.5rem auto 1.5rem auto;
+  border-radius: 5px;
+}
+
+/* Button columns */
+.button-column {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  top: 55%;
+  transform: translateY(-50%);
+  z-index: 3;
+}
+
+/* Move closer to center */
+.button-left {
+  left: 7%; /* adjust as needed */
+}
+
+.button-right {
+  right: 7%; /* adjust as needed */
+}
+
+/* Button styles */
+.button-column button {
+  padding: 12px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  border: none;
+  background-color: #2C3E50;
+  color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  transition: background-color 0.3s ease;
+}
+
+.button-column button:hover {
+  background-color: #1A242F;
+}
+
+/* Left column alternate positions */
+.button-left .tooltip-wrapper:nth-child(odd) {
+  transform: translateX(15px);
+}
+.button-left .tooltip-wrapper:nth-child(even) {
+  transform: translateX(-15px);
+}
+
+/* Right column alternate positions */
+.button-right .documents-card:nth-child(odd) {
+  transform: translateX(-15px);  /* push right */
+}
+.button-right .documents-card:nth-child(even) {
+  transform: translateX(15px); /* push left */
+}
+
+
+
+/* Hidden initially */
+.slide-in {
+  opacity: 0;
+  transform: scale(0.8) translateY(30px);
+  transition: all 0.6s ease-out;
+}
+
+/* Animate in when in view */
+.slide-in-visible {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+
+
+/* ---------- Responsive for tablets and smaller ---------- */
+@media (max-width: 1024px) {
+  .services-section-withbg {
+    display: flex;
+    flex-direction: column; /* stack vertically */
+    align-items: center;
+    height: auto;
+    padding: 2rem 0;
+  }
+
+  /* Center images on top */
+  .center-images {
+    order: 1;
+    width: 90%;
+    margin-bottom: 2rem;
+    margin-top: 2rem;
+  }
+
+  /* Left buttons below center */
+/*  .button-left {
+    order: 2;
+    position: static;
+    display: flex;
+    flex-direction: column; /* stack buttons vertically */
+  /*  align-items: center;
+    width: 100%; /* same width as image */
+  /*  max-width: 40%;
+    gap: 10px;
+    margin-bottom: 1rem;
+    transform: none;
+  }*/
+
+    /* Left buttons below center */
+  .button-left {
+    order: 2;
+    position: static;
+    display: flex;
+    flex-direction: column; /* stack buttons vertically */
+    align-items: center;
+    width: 100%; /* same width as image */
+    max-width: 400px;
+    gap: 10px;
+    margin-bottom: 1rem;
+    transform: none;
+    padding-left: 50px;
+    padding-right: 50px;
+  }
+
+
+  /* Right buttons below left */
+/*  .button-right {
+    order: 3;
+    position: static;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%; /* same width as left buttons */
+/*    max-width: 40%;
+    gap: 10px;
+    margin-bottom: 1rem;
+    transform: none;
+  }*/
+
+  .button-right {
+    order: 3;
+    position: static;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%; /* same width as left buttons */
+    max-width: 400px;
+    gap: 10px;
+    margin-bottom: 1rem;
+    transform: none;
+    padding-left: 50px;
+    padding-right: 50px;
+  }
+
+  /* Make all buttons full width */
+  .button-column button,
+  .button-left .documents-card,
+  .button-right .documents-card {
+    width: 100%; /* fill parent container */
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .kap-services {
+    width: 50%;
+    max-width: 400px;
+  }
+
+  .background-services {
+    width: 80%;
+  }
+
+  .services-header {
+    width: 90%;
+    top: 10%;
+  }
+
+  .services-title {
+    font-size: 2rem;
+  }
+
+  .headerpic-services {
+    height: 120px;
+    font-size: 23px;
+    background-position: center 50%;
+  }
+
+  /* Remove transforms from cards and tooltips */
+  .button-left .tooltip-wrapper,
+  .button-right .documents-card {
+    transform: none !important;
+    margin-left: 0;
+    margin-right: 0;
+  }
+}
+
+/* ---------- Mobile phones ---------- */
+@media (max-width: 768px) {
+  .services-section-withbg {
+    flex-direction: column; /* stack vertically */
+    align-items: center;
+    padding: 1.5rem 0;
+  }
+
+  .center-images {
+    order: 1;
+    width: 90%;
+    margin-bottom: 1.5rem;
+  }
+
+  .button-left,
+  .button-right {
+    order: 2;
+    width: 100%;
+    max-width: none;
+    display: flex;
+    flex-direction: column;
+    /*align-items: center;*/
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 1rem;
+  }
+
+  .button-left .tooltip-wrapper,
+  .button-right .documents-card {
+    transform: none !important;
+    margin-left: 0;
+    margin-right: 0;
+    width: 100%;
+  }
+
+  .button-column button,
+  .button-left .documents-card,
+  .button-right .documents-card {
+    width: 100%; /* buttons and cards fill container */
+    box-sizing: border-box;
+  }
+
+  .kap-services {
+    width: 100%;
+    max-width: 300px;
+    margin-top: 30px;
+  }
+
+  .background-services {
+    width: 90%;
+     margin-top: 30px;
+  }
+
+  .services-title {
+    font-size: 1.5rem;
+  }
+
+
+  .documents-card {
+    width: 100%;
+    flex-direction: column;
+    padding: 10px;
+    gap: 5px;
+  }
+
+  .headerpic-services {
+    height: 120px;
+    font-size: 23px;
+    background-position: center 50%;
+  }
+  
+}

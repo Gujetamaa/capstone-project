@@ -1,0 +1,1497 @@
+"use client"
+import "@/CSS/IncidentModule/EditIncident.css";
+import { ChangeEvent,useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { generateDownloadLink } from "../../../../helpers/firestorehelper";
+import { doc, updateDoc, collection, where, getDocs, query, onSnapshot, deleteDoc, orderBy} from "firebase/firestore";
+import { db } from "../../../../db/firebase";
+import React from "react";
+import MenuBar from "@/app/(barangay-side)/components/incidentMenuBar";
+
+export default function EditLuponIncident() {
+    const [showSubmitPopup, setShowSubmitPopup] = useState(false); 
+    const [showPopup, setShowPopup] = useState(false);
+    const [popupMessage, setPopupMessage] = useState("");
+    const [showErrorPopup, setShowErrorPopup] = useState(false);
+    const [popupErrorMessage, setPopupErrorMessage] = useState("");
+    const [showContinuePopup, setShowContinuePopup] = useState(false);
+
+
+    const [hasSummonLetter, setHasSummonLetter] = useState(false);
+    const [isDialogueSectionFilled, setIsDialogueSectionFilled] = useState(false);
+    const [loading , setLoading] = useState(true);
+    const router = useRouter();
+    const searchParam = useSearchParams();
+
+
+    
+    const docId = searchParam.get("id");
+    const [reportData, setReportData] = useState<any>();
+    const departmentId = reportData?.department;
+    const [concernImageUrl, setconcernImageUrl] = useState<string | null>(null);
+    
+
+    const [summonLetterData, setSummonLetterData] = useState<any[]>([]);
+    useEffect(()=>{
+        if (!docId) return;
+        const colRef = query(
+            collection(db, "IncidentReports", docId, "SummonsMeeting"),
+            orderBy("createdAt", "desc")
+        );
+        const unsubscribe = onSnapshot(colRef, (snapshot) => {
+            const fetchedData = snapshot.docs.map(doc => doc.data());
+            setSummonLetterData(fetchedData);
+        });
+        return () => unsubscribe();
+    },[docId]);
+
+    const [showDoneIncidentPopup, setShowDoneIncidentPopup] = useState(false);
+
+    useEffect(() => {
+      if(summonLetterData[2]?.filled && (reportData?.status === "pending")  ){
+        setShowDoneIncidentPopup(true);
+      }
+    },[summonLetterData]);
+
+    console.log("Summon Letter Data:", summonLetterData);
+
+    useEffect(() => {
+      if(!docId) return;
+        const docRef = doc(db, "IncidentReports", docId);
+        const unsubscribe = onSnapshot(docRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setReportData(data);
+          } else {
+            console.log("No such document!");
+          }
+        });
+      setLoading(false);
+      // Cleanup function to unsubscribe from the snapshot listener
+        return () => unsubscribe();
+      
+      
+    }, [docId]);
+
+
+    console.log("Report Data:", reportData);
+
+    const [toUpdate, setToUpdate] = useState<any|null>({
+      complainant: {
+        fname: "",
+        lname: "",
+        sex: "",
+        age: "",
+        civilStatus: "",
+        address: "",
+        contact: "",
+      },
+      respondent: {
+        fname: "",
+        lname: "",
+        sex: "",
+        age: "",
+        civilStatus: "",
+        address: "",
+        contact: "",
+      },
+      fname: "",
+      lname: "",
+      nature: "",
+      location: "",
+      status: reportData?.status,
+      nosofMaleChildren: "",
+      nosofFemaleChildren: "",
+      
+      
+      refailureDialogueStatus:"Present",
+      reasonForFailureToAppearDialogue: reportData?.reasonForFailureToAppearDialogue || "",
+    });
+    
+    useEffect(() => {
+      if(!docId) return;
+      if((reportData?.complainantAbsents === 2) || (reportData?.respondentAbsents=== 2 && reportData?.complainantAbsent===2) ){
+        const mainDocRef = doc(db, "IncidentReports", docId); 
+        updateDoc(mainDocRef, {
+          status: "dismissed",
+          statusPriority: 5,
+        })
+        router.push(`/dashboard/IncidentModule/Department?id=${reportData?.department}`);
+      }
+    }, [reportData,docId]);
+
+    useEffect(() => {
+      if(reportData?.file){
+        generateDownloadLink(reportData?.file, "IncidentReports").then(url => {
+          if (url) setconcernImageUrl(url);
+        });
+      }
+    },[reportData]);
+
+    
+  useEffect(() => {
+  const id = searchParam.get("id");
+  const department = reportData?.department;
+
+  // Only update if both exist and department not yet in URL
+  if (id && department && !searchParam.get("department")) {
+    // Manually build the ordered query string
+    const newUrl = `${window.location.pathname}?department=${encodeURIComponent(department)}&id=${encodeURIComponent(id)}`;
+    router.replace(newUrl, { scroll: false });
+  }
+}, [reportData]);
+
+
+    const department =  reportData?.department;
+    
+    const handleFormChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+      const { name, value, type } = e.target;
+    
+      setToUpdate((prevState: any) => {
+        if (type === "file") {
+          const fileInput = e.target as HTMLInputElement;
+          if (fileInput.files && fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+    
+            const keys = name.split(".");
+            if (keys.length === 2) {
+              return {
+                ...prevState,
+                [keys[0]]: {
+                  ...prevState[keys[0]],
+                  [keys[1]]: file, // Store the file object
+                },
+              };
+            }
+    
+            return {
+              ...prevState,
+              [name]: file,
+            };
+          }
+        }
+    
+        let newValue: any = value;
+    
+        // ✅ Prevent negative numbers
+        if (type === "number") {
+          const numericValue = Number(value);
+          if (numericValue < 0) return prevState; // Do not update if negative
+          newValue = numericValue;
+        }
+    
+        // Handle nested fields (text/select inputs)
+        const keys = name.split(".");
+        if (keys.length === 2) {
+          return {
+            ...prevState,
+            [keys[0]]: {
+              ...prevState[keys[0]],
+              [keys[1]]: newValue,
+            },
+          };
+        }
+    
+        return {
+          ...prevState,
+          [name]: newValue,
+        };
+      });
+    };
+    
+      
+    const removeUndefined = (obj: any): any => {
+      if (typeof obj !== "object" || obj === null) return obj;
+    
+      return Object.fromEntries(
+        Object.entries(obj)
+          .map(([key, value]) => [key, removeUndefined(value)]) // Recursively clean nested objects
+          .filter(([_, value]) => value !== undefined) // Remove undefined values
+      );
+    };
+    
+    // Ensure mergeData never returns undefined
+    const mergeData = (oldValue: any, newValue: any) => {
+      return newValue !== "" && newValue !== undefined ? newValue : oldValue;
+    };
+    
+    const HandleEditDoc = async () => {
+      
+      if (docId) {
+        const docRef = doc(db, "IncidentReports", docId);
+
+        // Fixing receivedBy handling (avoiding split on undefined)
+        const receivedByParts = reportData.receivedBy?.split(" ") || ["", ""];
+        const receivedByFname = mergeData(receivedByParts[0], toUpdate.fname);
+        const receivedByLname = mergeData(receivedByParts[1], toUpdate.lname);
+
+        // Determine statusPriority based on status
+        let statusValue = mergeData(reportData.status, toUpdate.status);
+        let statusPriority = 1;
+        if (statusValue === "archived") {
+          statusPriority = 2;
+        } else if(statusValue === "settled") {
+          statusPriority = 3;
+        }
+        else if (statusValue === "pending") {
+          statusPriority = 1;
+        }
+        else if(statusValue === "CFA") {
+          statusPriority = 4;
+        }
+
+        const cleanedData = removeUndefined({
+          complainant: {
+        fname: mergeData(reportData.complainant?.fname, toUpdate.complainant?.fname),
+        lname: mergeData(reportData.complainant?.lname, toUpdate.complainant?.lname),
+        sex: mergeData(reportData.complainant?.sex, toUpdate.complainant?.sex),
+        age: mergeData(reportData.complainant?.age, toUpdate.complainant?.age),
+        civilStatus: mergeData(reportData.complainant?.civilStatus, toUpdate.complainant?.civilStatus),
+        address: mergeData(reportData.complainant?.address, toUpdate.complainant?.address),
+        contact: mergeData(reportData.complainant?.contact, toUpdate.complainant?.contact),
+          },
+          respondent: {
+        fname: mergeData(reportData.respondent?.fname, toUpdate.respondent?.fname),
+        lname: mergeData(reportData.respondent?.lname, toUpdate.respondent?.lname),
+        sex: mergeData(reportData.respondent?.sex, toUpdate.respondent?.sex),
+        age: mergeData(reportData.respondent?.age, toUpdate.respondent?.age),
+        civilStatus: mergeData(reportData.respondent?.civilStatus, toUpdate.respondent?.civilStatus),
+        address: mergeData(reportData.respondent?.address, toUpdate.respondent?.address),
+        contact: mergeData(reportData.respondent?.contact, toUpdate.respondent?.contact),
+          },
+          receivedBy: `${receivedByFname} ${receivedByLname}`,
+          nature: mergeData(reportData.nature, toUpdate.nature),
+          location: mergeData(reportData.location, toUpdate.location),
+          status: statusValue,
+          statusPriority: statusPriority,
+          nosofFemaleChildren: mergeData(reportData.nosofFemaleChildren, toUpdate.nosofFemaleChildren),
+          nosofMaleChildren: mergeData(reportData.nosofMaleChildren, toUpdate.nosofMaleChildren),
+
+          isMediation: toUpdate.isMediation ?? false,
+          isConciliation: toUpdate.isConciliation ?? false,
+          isArbitration: toUpdate.isArbitration ?? false,
+        });
+
+        await updateDoc(docRef, cleanedData);
+      }
+    };
+
+    
+
+    
+
+  const confirmSubmit = async () => {
+    setShowSubmitPopup(false);
+
+    try {
+      await HandleEditDoc(); // ✅ Only update when Yes is clicked
+
+      setPopupMessage("Incident Successfully Updated!");
+      setShowPopup(true);
+
+      setTimeout(() => {
+        setShowPopup(false);
+        if (docId && departmentId) {
+          router.push(`/dashboard/IncidentModule/Department?id=${departmentId}&incidentId=${docId}`);
+        }
+      }, 3000);
+    } catch (error) {
+      console.error("Error during confirmation submit:", error);
+      setPopupErrorMessage("Error updating incident. Please try again.");
+      setShowErrorPopup(true);
+      setTimeout(() => setShowErrorPopup(false), 3000);
+    }
+};
+
+
+    const handleBack = () => {
+      router.push(`/dashboard/IncidentModule/Department?id=${department}`);
+    };
+    
+
+    /*
+    const handleGenerateLetterAndInvitation = (e:any) => {
+      const action = e.currentTarget.name;
+      router.push(`/dashboard/IncidentModule/EditIncident/LetterAndInvitation?id=${docId}?action=${action}`);
+    };
+
+    const handleDialogueSection = () => {
+      router.push(`/dashboard/IncidentModule/EditIncident/DialogueSection?id=${docId}`);
+    };
+
+    const handleHearingSection = () => {
+      router.push(`/dashboard/IncidentModule/EditIncident/HearingSection?id=${docId}`);
+    };*/
+
+
+const handleGenerateLetterAndInvitation = (e: any) => {
+  const action = e.currentTarget.name;
+  router.push(`/dashboard/IncidentModule/EditIncident/LetterAndInvitation?id=${docId}&action=${action}&department=${departmentId}`);
+};
+
+const handleDialogueSection = () => {
+  router.push(`/dashboard/IncidentModule/EditIncident/DialogueSection?id=${docId}&department=${departmentId}`);
+};
+
+const handleHearingSection = (e:any) => {
+  router.push(`/dashboard/IncidentModule/EditIncident/HearingSection?id=${docId}&department=${departmentId}`);
+};
+      
+
+    useEffect(() => {
+      if (reportData) {
+        setToUpdate({
+          complainant: {
+            fname: reportData.complainant?.fname || "",
+            lname: reportData.complainant?.lname || "",
+            sex: reportData.complainant?.sex || "",
+            age: reportData.complainant?.age || "",
+            civilStatus: reportData.complainant?.civilStatus || "",
+            address: reportData.complainant?.address || "",
+            contact: reportData.complainant?.contact || "",
+          },
+          respondent: {
+            fname: reportData.respondent?.fname || "",
+            lname: reportData.respondent?.lname || "",
+            sex: reportData.respondent?.sex || "",
+            age: reportData.respondent?.age || "",
+            civilStatus: reportData.respondent?.civilStatus || "",
+            address: reportData.respondent?.address || "",
+            contact: reportData.respondent?.contact || "",
+          },
+          fname: reportData.receivedBy?.split(" ")[0] || "",
+          lname: reportData.receivedBy?.split(" ")[1] || "",
+          nature: reportData.nature || "",
+          location: reportData.location || "",
+          status: reportData.status || "pending",
+          nosofMaleChildren: reportData.nosofMaleChildren || "",
+          nosofFemaleChildren: reportData.nosofFemaleChildren || "",
+          isMediation: reportData.isMediation || false,
+          isConciliation: reportData.isConciliation || false,
+          isArbitration: reportData.isArbitration || false,
+          timeReceived: reportData.timeReceived || "",
+          dateReceived: reportData.dateReceived || "",
+          refailureDialogueStatus: reportData.refailureDialogueStatus||"Present",
+          // refailureHearingStatus0: "Present",
+          // refailureHearingStatus1: "Present",
+          // refailureHearingStatus2: "Present",
+
+          reasonForFailureToAppearDialogue: reportData.reasonForFailureToAppearDialogue || "",
+        
+        });
+      }
+    }, [reportData]);
+
+useEffect(() => {
+      if (!reportData?.refailureHearingDetails) {
+        if (reportData?.sentLetterOfFailureToAppearHearing &&
+            Object.keys(reportData.sentLetterOfFailureToAppearHearing).length > 0) {
+            
+          Object.entries(reportData.sentLetterOfFailureToAppearHearing).forEach(
+            ([key, _value]) => {
+              setToUpdate((prevState: any) => ({
+                ...prevState,
+                [`refailureHearingStatus${key}`]: "Present",
+                [`reasonForFailureToAppearHearing${key}`]: "",
+              }));
+            }
+          );
+        }
+      }
+    
+      else{
+        Object.entries(reportData.refailureHearingDetails).forEach(
+          ([key, detail]: [string, any]) => {
+            setToUpdate((prevState: any) => ({
+              ...prevState,
+              [`refailureHearingStatus${key}`]: detail.resStatus || "Present",
+              [`reasonForFailureToAppearHearing${key}`]: detail.reason || "",
+            }));
+          }
+        );
+      }
+    }, [reportData]);
+
+
+    console.log("To Update State:", toUpdate);
+  const [activeSection, setActiveSection] = useState("complainant");
+
+
+  useEffect(() => {
+    const fetchSummonLetterStatus = async () => {
+      try {
+        if (!docId) return; // Ensure docId is loaded
+  
+        const lettersRef = collection(db, "IncidentReports", docId, "GeneratedLetters");
+  
+        const q = query(lettersRef, where("letterType", "==", "summon"));
+        const snapshot = await getDocs(q);
+  
+        if (!snapshot.empty) {
+          setHasSummonLetter(true);
+        } else {
+          setHasSummonLetter(false); // Optional fallback
+        }
+      } catch (error) {
+        console.error("Error checking summon letters:", error);
+      }
+    };
+  
+    fetchSummonLetterStatus();
+  }, [docId]);
+
+  
+  useEffect(() => {
+  if (!docId) return;
+  const docRef = doc(db, "IncidentReports", docId, "DialogueMeeting", docId);
+
+  const unsubscribe = onSnapshot(docRef, (docSnap) => {
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      setIsDialogueSectionFilled(data.filled); // true or false
+    } else {
+      setIsDialogueSectionFilled(false); // default to false if no doc
+    }
+  });
+
+  return () => unsubscribe();
+}, [docId]);
+
+
+
+
+ 
+  const [generatedLetters, setGeneratedLetters] = useState<any[]>([]);
+  useEffect(() => {
+    if (!docId) return;
+    const lettersRef = collection(db, "IncidentReports", docId, "GeneratedLetters");
+    const unsubscribe = onSnapshot(lettersRef, (snapshot) => {
+      const fetchedData:any[] = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setGeneratedLetters(fetchedData); 
+    });
+    
+
+    return () => unsubscribe();
+
+  }, [docId]);
+
+  const [mediaType, setMediaType] = useState<string>("");
+
+ useEffect(() => {
+  let type = "";
+
+  if (concernImageUrl) {
+    // Try to extract file name with extension from Firebase URL
+    const match = concernImageUrl.match(/\/o\/(.*?)\?/); // get path after /o/ and before ?
+    const decodedPath = match ? decodeURIComponent(match[1]) : "";
+    const fileExtension = decodedPath.split('.').pop()?.toLowerCase();
+
+    console.log("Decoded filename:", decodedPath);
+    console.log("File Extension:", fileExtension);
+
+    if (fileExtension?.match(/(jpg|jpeg|png|gif|webp)$/)) {
+      type = "image";
+    } else if (fileExtension?.match(/(mp3|wav|ogg)$/)) {
+      type = "audio";
+    } else if (fileExtension?.match(/(mp4|webm|ogg)$/)) {
+      type = "video";
+    } else {
+      type = "unsupported";
+    }
+  }
+
+    setMediaType(type);
+  }, [concernImageUrl]);
+
+  console.log("Generated Letter:", generatedLetters);
+
+
+  const handleClosingCase = async(status:boolean) => {
+    if (!docId) return;
+    setShowDoneIncidentPopup(false);
+    const docRef = doc(db, "IncidentReports", docId);
+    if(status) {
+      // If the case is closed, update the status to "Settled" and reset other fields
+      setPopupMessage("Incident case has been Settled.");
+      setShowPopup(true);
+      await updateDoc(docRef, {
+        status: "settled",
+        statusPriority: 3,
+      });
+      setTimeout(() => {
+        setShowPopup(false);
+        //router.push(`/dashboard/IncidentModule/Department?id=${departmentId}&incidentId=${docId}`);
+        //window.location.reload(); // Reload the page to ensure all data is fresh
+      }, 3000);
+    }
+    else{
+      // If the case is not closed, update the status to "cfa"
+      setPopupMessage("Incident case has been set to CFA.");
+      setShowPopup(true);
+      await updateDoc(docRef, {
+        status: "CFA",
+        statusPriority: 4,
+      });
+      setTimeout(() => {
+        setShowPopup(false);
+        //router.push(`/dashboard/IncidentModule/Department?id=${departmentId}&incidentId=${docId}`);
+        //window.location.reload(); // Reload the page to ensure all data is fresh
+      }, 3000);
+    }
+
+  }
+
+const [hasRespondentAbsentInHearingIndex, setHasRespondentAbsentInHearingIndex] = useState(0);
+  const [hasRespondentAbsentInHearingLength, setHasRespondentAbsentInHearingLength] = useState(0);
+
+  useEffect(() => {
+     if (!reportData) return;
+ 
+     // Get all keys like respondentAbsentInHearing0, respondentAbsentInHearing1, ...
+     const keys = Object.keys(reportData).filter((key) =>
+         key.startsWith("respondentAbsentInHearing")
+     );
+ 
+     // Count how many there are
+     setHasRespondentAbsentInHearingLength(keys.length);
+ 
+     if (keys.length > 0) {
+         // Extract numeric suffix (e.g., 0,1,2)
+         const indices = keys.map((key) =>
+         Number(key.replace("respondentAbsentInHearing", ""))
+         );
+ 
+         // Get the latest (max index)
+         const maxIndex = Math.max(...indices);
+ 
+         setHasRespondentAbsentInHearingIndex(maxIndex);
+     } else {
+         setHasRespondentAbsentInHearingIndex(0);
+     }
+  }, [reportData]);
+  useEffect(() => {
+    if (!reportData) return;
+
+    const parsedDeadline = reportData?.refailureExplainationMeetingDialogue
+      ? new Date(reportData.refailureExplainationMeetingDialogue)
+      : null;
+
+
+    if (!parsedDeadline) return;
+
+    // ✅ Create an interval to check every minute
+    const interval = setInterval(async () => {
+      const now = new Date();
+      if ((now > parsedDeadline) && (!reportData?.reasonForFailureToAppearDialogue)) { 
+        await updateDoc(doc(db, "IncidentReports", docId || ""), {
+          reasonForFailureToAppearDialogue: "Respondent Did not Appear",
+        });
+
+        clearInterval(interval); // stop checking once condition is met
+      }
+    }, 60 * 1000); // every 1 minute
+
+    // ✅ Run an immediate check so it doesn’t wait 1 min for the first evaluation
+    const now = new Date();
+    if (now > parsedDeadline) {
+      updateDoc(doc(db, "IncidentReports", docId || ""), {
+        reasonForFailureToAppearDialogue: "Respondent Did not Appear",
+      });
+      clearInterval(interval);
+    }
+
+    // cleanup interval on unmount
+    return () => clearInterval(interval);
+  }, [reportData, docId]);
+
+
+  useEffect(() => {
+    if (!reportData) return;
+
+    const refailureHearingKey = `refailureExplainationMeetingHearing${hasRespondentAbsentInHearingIndex}`;
+    const parsedDeadline = reportData && reportData[refailureHearingKey]
+      ? new Date(reportData[refailureHearingKey])
+      : null;
+
+
+    if (!parsedDeadline) return;
+
+    // ✅ Create an interval to check every minute
+    const interval = setInterval(async () => {
+      const now = new Date();
+      if ((now > parsedDeadline) && (!reportData?.refailureHearingDetails?.[hasRespondentAbsentInHearingIndex]?.reason ||reportData?.refailureHearingDetails?.[hasRespondentAbsentInHearingIndex]?.reason === "")) {
+        await updateDoc(doc(db, "IncidentReports", docId || ""), {
+          [`refailureHearingDetails.${hasRespondentAbsentInHearingIndex}`]: {
+          //resStatus: toUpdate[`refailureHearingStatus${key}`] || "Absent",
+          reason: "Respondent Did not Appear",
+          }        
+        });
+
+        clearInterval(interval); // stop checking once condition is met
+      }
+    }, 60 * 1000); // every 1 minute
+
+    // ✅ Run an immediate check so it doesn’t wait 1 min for the first evaluation
+    const now = new Date();
+    if (now > parsedDeadline) {
+      updateDoc(doc(db, "IncidentReports", docId || ""), {
+        reasonForFailureToAppearDialogue: "Respondent Did not Appear",
+      });
+      clearInterval(interval);
+    }
+
+    // cleanup interval on unmount
+    return () => clearInterval(interval);
+  }, [reportData, docId]);
+
+
+  return (
+    <>
+      {loading ? (       <p></p> ) : (
+        <main className="main-container-edit">
+
+          <MenuBar id = {docId||""} department={department} />
+          
+          <div className="edit-incident-main-content">
+            <div className="edit-incident-main-section1">
+              <div className="edit-incident-main-section1-left">
+                <button onClick={handleBack}>
+                  <img src="/Images/left-arrow.png" alt="Left Arrow" className="back-btn"/> 
+                </button>
+
+                <h1> Incident Details </h1>
+              </div>
+
+              <div className="action-btn-section">
+                
+              {/* <button type="submit" className="action-view-edit" onClick={handleSubmit}>
+                  {loading ? "Saving..." : "Save"}
+                </button> */}
+              </div>
+              
+            </div>
+
+            <div className="edit-incident-header-body">
+             <div className="edit-incident-header-body-top-section">
+                <div className="edit-incident-info-toggle-wrapper">
+                    {["complainant", "respondent", "incident",
+                    // ...(reportData?.sentLetterOfFailureToAppearDialogue ? ["refailure dialgoue"] : []),
+                    // ...(reportData?.sentLetterOfFailureToAppearHearing &&
+                    //  Object.keys(reportData?.sentLetterOfFailureToAppearHearing).length > 0
+                    //    ? ["refailure hearing"]
+                    //    : []),
+                    "barangay desk"
+                    ].map((section) => (
+                    <button
+                      key={section}
+                      type="button"
+                      className={`info-toggle-btn ${activeSection === section ? "active" : ""}`}
+                      onClick={() => setActiveSection(section)}
+                    >
+                      {section === "complainant" && "Complainant"}
+                      {section === "respondent" && "Respondent"}
+                      {section === "incident" && "Incident"}
+                      {section === "refailure dialgoue" && "Refailure Meeting (Dialogue)"}
+                      {section === "refailure hearing" && "Refailure Meeting (Hearing)"}
+                      {section === "barangay desk" && "Desk Officer"}
+                    </button>
+                  ))}
+                </div> 
+              </div>
+
+              <div className="edit-incident-header-body-bottom-section">
+                <div className="edit-incident-main-details-container">
+                  <div className="edit-incident-main-details-section">
+                    <div className="edit-incident-main-details-topsection">
+                      <h1>{reportData?.caseNumber}</h1>
+                    </div>
+                    <div className="edit-incident-main-details-statussection">
+                      <h1> Status</h1>
+
+                      <div className="status-section-view">
+                        <select
+                          id="status"
+                          className={`status-dropdown-edit ${toUpdate.status?.toLowerCase() || reportData?.status.toLowerCase() || "pending"}`}
+                          name="status"
+                          value={toUpdate?.status ?? reportData?.status ?? "pending"}  // changed to small
+                          onChange={handleFormChange}
+                          onFocus ={(e) => e.target.blur()} // Prevents focus outline
+                          disabled
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="dismissed">Dismissed</option>
+                          <option value="settled">Settled</option>
+                          <option value="Refer to Government Agency">Refer to Government Agency</option>
+                          <option value="CFA">CFA</option>
+                        </select>
+                      </div> 
+                    </div>
+
+
+                    <div className="edit-incident-main-details-description">
+
+                      <div className="incident-date-section">
+                        <div className="incident-date-topsection">
+                          <div className="incident-main-details-icons-section">
+                            <img src="/Images/calendar.png" alt="calendar icon" className="view-incident-description-icon-calendar" />
+                          </div>
+                          <div className="incident-main-details-title-section">
+                            <h1>Date Filed</h1>
+                          </div>
+                        </div>
+                        <p>{`${reportData?.dateFiled}${reportData?.isReportLate ? " (Late Filing)" : ""} `  || "N/A"}</p>
+
+                      </div>
+
+                      <div className="incident-location-section">
+                        <div className="incident-loc-topsection">
+                          <div className="incident-main-details-icons-section">
+                            <img src="/Images/loc.png" alt="location icon" className="view-incident-description-icon-loc" />
+                          </div>
+                          <div className="incident-main-details-title-section">
+                            <h1>Location</h1>
+                          </div>
+                        </div>
+                        <p>{`${reportData?.location} - ${reportData?.areaOfIncident}` || "N/A"}</p>
+                      </div>
+                        
+                      <div className="incident-description-section">
+                        <div className="incident-desc-topsection">
+                          <div className="incident-main-details-icons-section">
+                            <img src="/Images/description.png" alt="description icon" className="view-incident-description-icon-desc" />
+                          </div>
+                          <div className="incident-main-details-title-section">
+                            <h1>Nature</h1>
+                          </div>
+                        </div>
+                        <p>{reportData?.nature || "N/A"}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="edit-incident-info-main-container">
+                  <div className="edit-incident-info-container-scrollable">
+                    <div className="edit-incident-info-main-content">
+                      {activeSection === "complainant" && (
+                        <>
+                          <div className="edit-incident-dialogue-content">
+                            <div className="edit-incident-content-topsection">
+                              <div className="edit-incident-content-left-side">
+                                <div className="edit-incident-fields-section">
+                                  <p>Last Name</p>
+                                  <input type="text" className="edit-incident-input-field" 
+                                  placeholder= {reportData?.complainant.lname} value={toUpdate.complainant.lname} 
+                                  name="complainant.lname" id="complainant.lname" onChange={handleFormChange} disabled/>
+                                </div>
+
+                                <div className="edit-incident-fields-section">
+                                  <p>First Name</p>
+                                  <input type="text" className="edit-incident-input-field" disabled placeholder= {reportData?.complainant.fname} value={toUpdate.complainant.fname} name="complainant.fname" id="complainant.fname" onChange={handleFormChange} />
+                                </div>
+
+                                <div className="edit-incident-fields-section">
+                                  <p>Civil Status</p>
+                                  <select   className="edit-incident-input-field"    
+                                    value={toUpdate.complainant.civilStatus || reportData?.complainant.civilStatus || ""} // Show db value or user-updated value
+                                    name="complainant.civilStatus"
+                                    id="complainant.civilStatus" disabled
+                                    onChange={handleFormChange}
+                                    required>
+                                    <option value="" disabled>Choose A Civil Status</option>
+                                    <option value="Single">Single</option>
+                                    <option value="Married">Married</option>
+                                    <option value="Widowed">Widowed</option>
+                                    <option value="Separated">Separated</option>
+                                    <option value="Divorced">Divorced</option>
+                                  </select>
+                                </div>
+                              </div>
+
+                              <div className="edit-incident-content-right-side">
+                                <div className="edit-incident-fields-section">
+                                  <p>Age</p>
+                                  <input type="text" disabled className="edit-incident-input-field" placeholder= {reportData?.complainant.age} value={toUpdate.complainant.age} name="complainant.age" id="complainant.age" onChange={handleFormChange} />
+                                </div>
+
+                                <div className="edit-incident-fields-section">
+                                  <p>Gender</p>
+                                  <select 
+                                    className="edit-incident-input-field"                     
+                                    name="complainant.sex" 
+                                    id="complainant.sex" disabled
+                                    value={toUpdate.complainant.sex || reportData?.complainant.sex || ""} // Show db value or user-updated value
+                                    onChange={handleFormChange}
+                                    >
+                                    <option value="" disabled>Select Gender</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                  </select>
+                                </div>
+
+                                <div className="edit-incident-fields-section">
+                                  <p>Address</p>
+                                  <input type="text" disabled className="edit-incident-input-field" placeholder= {reportData?.complainant.address} value={toUpdate.complainant.address} name="complainant.address" id="complainant.address" onChange={handleFormChange} />
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="bottom-middle-section">
+                              <div className="bottom-middle-incidentfields">
+                                <p>Contact Number</p>
+                                <input type="text" disabled className="edit-incident-input-field" placeholder={reportData?.complainant.contact} value={toUpdate.complainant.contact} name="complainant.contact" id="complainant.contact" onChange={handleFormChange} />
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {activeSection === "respondent" && (
+                        <>
+                        <div className="edit-incident-dialogue-content">
+                            <div className="edit-incident-content-topsection">
+                              <div className="edit-incident-content-left-side">
+                                <div className="edit-incident-fields-section">
+                                  <p>Last Name</p>
+                                  <input type="text" disabled className="edit-incident-input-field" placeholder= {reportData?.respondent.lname} value={toUpdate.respondent.lname} name="respondent.lname" id="respondent.lname" onChange={handleFormChange} />
+                                </div>
+
+                                <div className="edit-incident-fields-section">
+                                  <p>First Name</p>
+                                  <input type="text" disabled className="edit-incident-input-field" placeholder= {reportData?.respondent.fname} value={toUpdate.respondent.fname} name="respondent.fname" id="respondent.fname" onChange={handleFormChange} />
+                                </div>
+
+                                <div className="edit-incident-fields-section">
+                                  <p>Civil Status</p>
+                                  <select   className="edit-incident-input-field"    
+                                    value={toUpdate.respondent.civilStatus || reportData?.respondent.civilStatus || ""} // Show db value or user-updated value
+                                    name="respondent.civilStatus" disabled
+                                    id="respondent.civilStatus"
+                                    onChange={handleFormChange}
+                                    required>
+                                    <option value="" disabled>Choose A Civil Status</option>
+                                    <option value="Single">Single</option>
+                                    <option value="Married">Married</option>
+                                    <option value="Widowed">Widowed</option>
+                                    <option value="Separated">Separated</option>
+                                    <option value="Divorced">Divorced</option>
+                                  </select>
+                                </div>
+                              </div>
+
+                              <div className="edit-incident-content-right-side">
+                                <div className="edit-incident-fields-section">
+                                  <p>Age</p>
+                                  <input type="text" disabled className="edit-incident-input-field" placeholder= {reportData?.respondent.age} value={toUpdate.respondent.age} name="respondent.age" id="respondent.age" onChange={handleFormChange} />
+                                </div>
+
+                                <div className="edit-incident-fields-section">
+                                  <p>Gender</p>
+                                  <select 
+                                    className="edit-incident-input-field"                     
+                                    name="respondent.sex" 
+                                    id="respondent.sex" disabled
+                                    value={toUpdate.respondent.sex || reportData?.respondent.sex || ""} // Show db value or user-updated value
+                                    onChange={handleFormChange}
+                                    >
+                                    <option value="" disabled>Select Gender</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                  </select>
+                                </div>
+
+                                <div className="edit-incident-fields-section">
+                                  <p>Address</p>
+                                  <input type="text"  disabled className="edit-incident-input-field" placeholder= {reportData?.respondent.address} value={toUpdate.respondent.address} name="respondent.address" id="respondent.address" onChange={handleFormChange} />
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="bottom-middle-section">
+                              <div className="bottom-middle-incidentfields">
+                                <p>Contact Number</p>
+                                <input type="text" disabled className="edit-incident-input-field" placeholder={reportData?.respondent.contact} value={toUpdate.respondent.contact} name="respondent.contact" id="respondent.contact" onChange={handleFormChange} />
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {activeSection === "incident" && (
+                        <>
+                          <div className="edit-incident-dialogue-content">
+                            <div className="edit-incident-content-topsection">
+                              <div className="edit-incident-content-left-side">
+                                <div className="edit-incident-fields-section">
+                                  <p>Nature of Complaint</p>
+                                  {reportData?.nature === "Others" ? (<>
+                                    <input type="text" className="edit-incident-input-field" 
+                                    placeholder={reportData.specifyNature}
+                                    value={toUpdate.nature}
+                                    name="nature"
+                                    id="nature"
+                                    onChange={handleFormChange} disabled/>
+                                  </>):(<>
+                                    <input type="text" className="edit-incident-input-field" 
+                                    placeholder={reportData?.nature}
+                                    value={toUpdate.nature}
+                                    name="nature"
+                                    id="nature"
+                                    onChange={handleFormChange} disabled/>
+                                  </>)}
+                                </div>
+                                {department === "GAD" && (
+                                  <>
+                                    <div className="edit-incident-fields-section">
+                                      <p>Nos of Male Children Victim/s</p>
+                                      <input 
+                                        type="number" 
+                                        className="edit-incident-input-field"
+                                        value={toUpdate.nosofMaleChildren || reportData?.nosofMaleChildren}
+                                        onChange={handleFormChange}
+                                        name="nosofMaleChildren"
+                                        disabled
+                                      />   
+                                    </div>
+                                  </>
+                                )}
+                                {/* I will be reusint the classname for recommendedEvent*/}
+                                { reportData?.typeOfIncident === "Minor" && (
+                                  <>
+                                    <div className="edit-incident-content-middle-section">
+                                      <div className="edit-incident-fields-section">
+                                        <p>Recommended Event </p>
+                                        <input type="text" className="edit-incident-input-field" 
+                                        value={`${reportData?.recommendedEvent}`} name="recommendedEvent" id="recommendedEvent" disabled/>
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                              <div className="edit-incident-content-right-side">
+                                <div className="edit-incident-fields-section">
+                                  <p>Location</p>
+                                  <input type="text" className="edit-incident-input-field" 
+                                    placeholder={reportData?.location} 
+                                    value={`${toUpdate.location} - ${reportData?.areaOfIncident}`}
+                                    name="location"
+                                    id="location"
+                                    onChange={handleFormChange} disabled
+                                  />
+                                </div>
+
+                                {department === "GAD" && (
+                                  <>
+                                    <div className="edit-incident-fields-section">
+                                      <p>Nos of Female Children Victim/s</p>
+                                      <input 
+                                        type="number" 
+                                        className="edit-incident-input-field"
+                                        value={toUpdate.nosofFemaleChildren||reportData?.nosofFemaleChildren}
+                                        name="nosofFemaleChildren"
+                                        onChange={handleFormChange}
+                                        disabled
+                                      />   
+                                    </div>
+                                  </>
+                                )}
+                                { reportData?.typeOfIncident === "Minor" && (
+                                    <div className="edit-incident-fields-section">
+                                      <p>Date & Time Filed</p>
+                                      <input type="text" className="edit-incident-input-field" placeholder={`${reportData?.dateFiled} ${reportData?.timeFiled}`} disabled/>
+                                    </div>
+                                )}
+                               
+                              </div>
+                            </div>
+                            
+                            <div className="bottom-middle-section">
+                              {reportData?.typeOfIncident === "Major" && (
+                                 <div className="bottom-middle-incidentfields">
+                                  <p>Date & Time Filed</p>
+                                  <input type="text" className="edit-incident-input-field" placeholder={`${reportData?.dateFiled} ${reportData?.timeFiled}`} disabled/>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="edit-incident-content-bottomsection">
+                              
+                            {reportData?.isReportLate && (
+                              <div className="box-container-outer-natureoffacts">
+                                  <div className="title-remarks-partyA">
+                                    Reason For Late Filing/Reporting
+                                  </div>
+
+                                  <div className="box-container-partyA">
+                                    <textarea className="natureoffacts-input-field" name="reasonForLateFiling" id="reasonForLateFiling" value={reportData?.reasonForLateFiling} onChange={handleFormChange} onFocusCapture={(e) => {e.target.blur();}} />
+                                  </div>
+                                </div>
+                            )}
+
+                              <div className="view-incident-partyA-container">
+                                <div className="box-container-outer-natureoffacts">
+                                  <div className="title-remarks-partyA">
+                                    Nature of Facts
+                                  </div>
+
+                                  <div className="box-container-partyA">
+                                    <textarea className="natureoffacts-input-field" name="concern" id="concern" value={reportData?.concern} onChange={handleFormChange} onFocusCapture={(e) => {e.target.blur();}} />
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="view-incident-partyA-container">
+                                <div className="box-container-outer-natureoffacts">
+                                  <div className="title-remarks-partyA">
+                                    Incident Evidence
+                                  </div>
+
+                                  <div className="box-container-incidentimage">
+                                    {concernImageUrl ? (
+                                    mediaType === "image" ? (
+                                      <a href={concernImageUrl} target="_blank" rel="noopener noreferrer">
+                                        <img src={concernImageUrl} alt="Incident Image" className="incident-img" />
+                                      </a>
+                                    ) : mediaType === "audio" ? (
+                                      <audio controls className="incident-audio" style={{ width: '100%' }}>
+                                        <source src={concernImageUrl} />
+                                        Your browser does not support the audio element.
+                                      </audio>
+                                    ) : mediaType === "video" ? (
+                                      <video controls className="" width="58%" > 
+                                        <source src={concernImageUrl} />
+                                        Your browser does not support the video element.
+                                      </video>
+                                    ) : (
+                                      <p className="unsupported-text">Unsupported media type</p>
+                                    )
+                                  ) : (
+                                    <p className="no-image-text">No media available</p>
+                                  )}
+
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                      {activeSection === "refailure dialgoue" && (
+                       <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200 max-w-md mx-auto">
+                        <div className="flex items-center space-x-2 mb-4">
+                         <input
+                            type="checkbox"
+                            id="refailuredialoguepresent"
+                            className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            checked={toUpdate.refailureDialogueStatus !== "Absent"} // default checked
+                            onChange={(e) =>
+                              setToUpdate((prev: any) => ({
+                                ...prev,
+                                refailureDialogueStatus: e.target.checked ? "Present" : "Absent",
+                                reasonForFailureToAppearDialogue: e.target.checked
+                                  ? "" // 🔹 clear when switching back to Present
+                                  : "Respondent Absent", // auto-set when Absent
+                              }))
+                            }
+                            disabled={!!reportData?.reasonForFailureToAppearDialogue?.trim()}
+                          />
+                          <label
+                            htmlFor="refailuredialoguepresent"
+                            className="text-gray-700 font-medium"
+                          >
+                            Respondent Present
+                          </label>
+
+
+                        </div>
+                          
+                        {/* Textarea */}
+                        <div className="mb-4">
+                          <label
+                            htmlFor="reasonForFailureToAppearDialogue"
+                            className="block text-gray-600 font-medium mb-2"
+                          >
+                            Reason for Failure to Appear During Dialogue Meeting
+                          </label>
+                          <textarea
+                            placeholder="Enter reason here..."
+                            name="reasonForFailureToAppearDialogue"
+                            id="reasonForFailureToAppearDialogue"
+                            value={
+                              toUpdate.reasonForFailureToAppearDialogue ||
+                              reportData?.reasonForFailureToAppearDialogue ||
+                              ""
+                            }
+                            disabled={
+                              toUpdate.refailureDialogueStatus === "Absent" ||
+                              !!reportData?.reasonForFailureToAppearDialogue?.trim()
+                            }
+                            onChange={(e) => {
+                              if (toUpdate.refailureDialogueStatus === "Present") {
+                                handleFormChange(e); // only allow typing if Present
+                              }
+                            }}
+                            className={`w-full min-h-[100px] p-3 border border-gray-300 rounded-lg shadow-sm 
+                              focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-700
+                              ${toUpdate.refailureDialogueStatus === "Absent" ? "bg-gray-100 cursor-not-allowed" : ""}
+                              disabled:cursor-not-allowed disabled:bg-gray-100`}
+                          />
+
+
+                        </div>
+                          
+                        {/* Submit button */}
+                        <button
+                          type="button"
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 
+                                     rounded-lg shadow-md transition duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                          // onClick={handleSubmitRefailureDialogue}
+                          disabled={
+                            !!(
+                                reportData?.reasonForFailureToAppearDialogue?.trim()
+                              )
+                          }
+
+                          onClick={() => {
+                            if (
+                              toUpdate.refailureDialogueStatus === "Present" &&
+                              toUpdate.reasonForFailureToAppearDialogue === "" ||
+                              !toUpdate.reasonForFailureToAppearDialogue
+                            ) {
+                              setPopupErrorMessage(
+                                "Please fill out the reason for failure to appear."
+                              );
+                              setShowErrorPopup(true);
+                              setTimeout(() => setShowErrorPopup(false), 3000);
+                              return;
+                            }
+                            if(!docId) return;
+                            const docRef = doc(db, "IncidentReports", docId );
+                             updateDoc(docRef, {
+                              refailureDialogueStatus: toUpdate.refailureDialogueStatus || "Absent",
+                              reasonForFailureToAppearDialogue: toUpdate.reasonForFailureToAppearDialogue || reportData?.reasonForFailureToAppearDialogue || "",
+                            })
+
+                            setPopupMessage("Refailure Dialogue Updated Successfully");
+                            setShowPopup(true);
+                            setTimeout(() => setShowPopup(false), 3000);
+
+                          }}
+                        >
+                          Submit
+                        </button>
+                      </div>
+
+
+                      )}
+
+                      {activeSection === "refailure hearing" && (
+                        <>
+                          {reportData?.sentLetterOfFailureToAppearHearing &&
+                            Object.keys(reportData.sentLetterOfFailureToAppearHearing).length > 0 && (
+                              <>
+                                {Object.entries(reportData.sentLetterOfFailureToAppearHearing).map(
+                                  ([key, value]) => (
+                                    <div key={key} className="bg-white p-6 rounded-xl shadow-md border border-gray-200 max-w-md mx-auto">
+                                      <div className="text-lg font-semibold text-gray-800 mb-4 flex justify-center">
+                                        {Number(key) === 0 ? (<>First</>) : Number(key) === 1 ? (<>Second</>) : Number(key) === 2 && (<>Third</>)} Hearing
+                                      </div>
+                                      <div className="flex items-center space-x-2 mb-4">
+                                       <input
+                                          type="checkbox"
+                                          id={`refailureHearingStatus${key}`}
+                                          className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                          checked={
+                                            (toUpdate[`refailureHearingStatus${key}`] ?? reportData?.refailureHearingDetails?.[key]?.status) !== "Absent"
+                                          }                                          
+                                          onChange={(e) =>
+                                            setToUpdate((prev: any) => ({
+                                              ...prev,
+                                              [`refailureHearingStatus${key}`]: e.target.checked ? "Present" : "Absent",
+                                              [`reasonForFailureToAppearHearing${key}`]: e.target.checked
+                                                ? "" // 🔹 clear when switching back to Present
+                                                : "Respondent Absent", // auto-set when Absent
+                                            }))
+                                          }
+                                          disabled={
+                                              !!(typeof reportData?.refailureHearingDetails?.[key]?.reason === "string" && reportData?.refailureHearingDetails?.[key]?.reason.trim())
+                                          }
+                                        />
+                                        <label
+                                          htmlFor={`refailureHearingStatus${key}`}
+                                          className="text-gray-700 font-medium"
+                                        >
+                                          Respondent Present
+                                        </label>
+                                        
+                                        
+                                      </div>
+                                        
+                                      {/* Textarea */}
+                                      <div className="mb-4">
+                                        <label
+                                          htmlFor={`reasonForFailureToAppearHearing${key}`}
+                                          className="block text-gray-600 font-medium mb-2"
+                                        >
+                                          Reason for Failure to Appear During Hearing Meeting
+                                        </label>
+                                        <textarea
+                                          placeholder="Enter reason here..."
+                                          name={`reasonForFailureToAppearHearing${key}`}
+                                          id={`reasonForFailureToAppearHearing${key}`}
+                                          value={
+                                            toUpdate[`reasonForFailureToAppearHearing${key}`] ||
+                                            reportData[`reasonForFailureToAppearHearing${key}`] ||""
+                                          }
+                                          disabled={
+                                            toUpdate[`refailureHearingStatus${key}`] === "Absent" ||
+                                              !!(typeof reportData?.refailureHearingDetails?.[key]?.reason === "string" && reportData?.refailureHearingDetails?.[key]?.reason.trim())
+                                          
+                                          }
+                                          onChange={(e) => {
+                                            if (toUpdate[`refailureHearingStatus${key}`] === "Present") {
+                                              handleFormChange(e); // only allow typing if Present
+                                            }
+                                          }}
+                                          className={`w-full min-h-[100px] p-3 border border-gray-300 rounded-lg shadow-sm 
+                                            focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-700
+                                            ${toUpdate[`refailureHearingStatus${key}`] === "Absent" ? "bg-gray-100 cursor-not-allowed" : ""}
+                                            disabled:cursor-not-allowed disabled:bg-gray-100`}
+                                        />
+              
+                                          
+                                      </div>
+                                          
+                                      {/* Submit button */}
+                                      <button
+                                        type="button"
+                                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 
+                                                   rounded-lg shadow-md transition duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                        // onClick={handleSubmitRefailureDialogue}
+                                        disabled={
+                                          
+                                          !!(typeof reportData?.refailureHearingDetails?.[key]?.reason === "string" && reportData?.refailureHearingDetails?.[key]?.reason.trim())
+                                          
+                                        }
+                                      
+                                        onClick={() => {
+                                          if (
+                                             toUpdate[`refailureHearingStatus${key}`] === "Present" &&
+                                            toUpdate[`reasonForFailureToAppearHearing${key}`] === "" ||
+                                            !toUpdate[`reasonForFailureToAppearHearing${key}`]
+                                          ) {
+                                            setPopupErrorMessage(
+                                              "Please fill out the reason for failure to appear."
+                                            );
+                                            setShowErrorPopup(true);
+                                            setTimeout(() => setShowErrorPopup(false), 3000);
+                                            return;
+                                          }
+                                          if(!docId) return;
+                                          const docRef = doc(db, "IncidentReports", docId );
+                                          updateDoc(docRef, {
+                                            [`refailureHearingDetails.${key}`]: {
+                                              resStatus: toUpdate[`refailureHearingStatus${key}`] || "Absent",
+                                              reason: toUpdate[`reasonForFailureToAppearHearing${key}`] 
+                                                    || reportData?.[`reasonForFailureToAppearHearing${key}`] 
+                                            }
+                                          });
+                                          const hearingLabel =
+                                          Number(key) === 0
+                                            ? "First"
+                                            : Number(key) === 1
+                                            ? "Second"
+                                            : Number(key) === 2
+                                            ? "Third"
+                                            : "";
+                                          setPopupMessage(`${hearingLabel} Hearing Refailure Updated Successfully`);
+                                          setShowPopup(true);
+                                          setTimeout(() => setShowPopup(false), 3000);
+                                          
+                                        }}
+                                        
+                                      >
+                                        Submit
+                                      </button>
+                                    </div>
+                                  )
+                                )}
+                              </>
+                            )}
+                        </>
+                      )}
+
+                      {activeSection === "barangay desk" && (
+                        <>
+                          <div className="barangay-desk-officer-section">
+                            <div className="edit-incident-fields-section-deskofficer">
+                              <p>Full Name</p>
+                              <input 
+                                type="text" 
+                                className="edit-incident-input-field" 
+                                placeholder={reportData?.receivedBy} 
+                                value={reportData?.receivedBy||""}
+                                name="receivedBy"
+                                id="receivedBy"
+                                disabled
+                                onChange={handleFormChange}
+                              />
+                            </div>
+
+                            <div className="edit-incident-fields-section-deskofficer">
+                              <p>Date Signed</p>
+                              <input 
+                                type="text" 
+                                className="edit-incident-input-field" 
+                                placeholder={reportData?.dateReceived} 
+                                value={toUpdate.dateReceived||""} 
+                                id="dateReceived" 
+                                name="dateReceived"
+                                disabled 
+                                onChange={handleFormChange}
+                              />
+                            </div>
+
+                            <div className="edit-incident-fields-section-deskofficer">
+                              <p>Time Signed</p>
+                              <input 
+                                type="text" 
+                                className="edit-incident-input-field" 
+                                placeholder={reportData?.timeReceived} 
+                                value={toUpdate.timeReceived||""} 
+                                id="timeReceived" 
+                                name="time  Received" 
+                                disabled
+                                onChange={handleFormChange}
+                              />
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+        {showSubmitPopup && (
+          <div className="confirmation-popup-overlay-add">
+            <div className="confirmation-popup-add">
+
+              {toUpdate.status === "settled" ? (
+                <>
+                  <p>How was the case settled?</p>
+                  <div className="settlement-options">
+                    <label>
+                      <input
+                        type="radio"
+                        name="settlementMethod"
+                        checked={toUpdate.isMediation === true}
+                        onChange={() => setToUpdate((prev: any) => ({
+                          ...prev,
+                          isMediation: true,
+                          isConciliation: false,
+                          isArbitration: false,
+                        }))}
+                      />
+                      Mediation
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        name="settlementMethod"
+                        checked={toUpdate.isConciliation === true}
+                        onChange={() => setToUpdate((prev: any) => ({
+                          ...prev,
+                          isMediation: false,
+                          isConciliation: true,
+                          isArbitration: false,
+                        }))}
+                      />
+                      Conciliation
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        name="settlementMethod"
+                        checked={toUpdate.isArbitration === true}
+                        onChange={() => setToUpdate((prev: any) => ({
+                          ...prev,
+                          isMediation: false,
+                          isConciliation: false,
+                          isArbitration: true,
+                        }))}
+                      />
+                      Arbitration
+                    </label>
+                  </div>
+
+                  <div className="yesno-container-add">
+                    <button
+                      onClick={() => setShowSubmitPopup(false)}
+                      className="no-button-add"
+                    >
+                      Cancel
+                    </button>
+                    <button onClick={confirmSubmit} className="yes-button-add">
+                      Submit
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                <img src="/Images/question.png" alt="warning icon" className="successful-icon-popup" />
+                  <p>Are you sure you want to submit?</p>
+                  <div className="yesno-container-add">
+                    <button
+                      onClick={() => setShowSubmitPopup(false)}
+                      className="no-button-add"
+                    >
+                      No
+                    </button>
+                    <button onClick={confirmSubmit} className="yes-button-add">
+                      Yes
+                    </button>
+                  </div>
+                </>
+              )}
+
+            </div>
+          </div>
+        )}
+
+
+        {showPopup && (
+                <div className={`popup-overlay-add show`}>
+                    <div className="popup-add">
+                      <img src="/Images/check.png" alt="icon alert" className="icon-alert" />
+                      <p>{popupMessage}</p>
+                    </div>
+                </div>
+                )}
+
+        {showErrorPopup && (
+                <div className={`error-popup-overlay-add show`}>
+                    <div className="popup-add">
+                      <img src={ "/Images/warning-1.png"} alt="popup icon" className="icon-alert"/>
+                      <p>{popupErrorMessage}</p>
+                    </div>
+                </div>
+                )}
+
+
+        
+
+     </main>
+      )}
+    </>
+  );
+}

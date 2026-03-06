@@ -1,0 +1,1453 @@
+"use client";
+import "@/CSS/Programs/SpecificProgram.css";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+import { Users, Handshake } from "lucide-react";
+import { useAuth } from "@/app/context/authContext";
+
+import {
+  doc,
+  getDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  addDoc,
+  serverTimestamp,
+  getCountFromServer,
+} from "firebase/firestore";
+import { db, storage } from "@/app/db/firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+
+const MONTHS = [
+  "January","February","March","April","May","June",
+  "July","August","September","October","November","December"
+];
+
+function formatYMDToLong(ymd?: string): string {
+  if (!ymd) return "";
+  const [y, m, d] = ymd.split("-").map(Number);
+  if (!y || !m || !d) return ymd;
+  return `${MONTHS[m - 1]} ${d}, ${y}`;
+}
+
+function formatHHmmTo12h(hhmm?: string): string {
+  if (!hhmm) return "";
+  const [hStr, mStr] = hhmm.split(":");
+  let h = Number(hStr);
+  const m = Number(mStr);
+  if (Number.isNaN(h) || Number.isNaN(m)) return hhmm;
+  const period = h >= 12 ? "PM" : "AM";
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h}:${String(m).padStart(2, "0")}${period}`;
+}
+
+// Which fields are locked (prefilled from user/resident data)
+// The list of predefined, lock-eligible fields
+const LOCKABLE_PREDEFINED = new Set([
+  "firstName",
+  "lastName",
+  "contactNumber",
+  "emailAddress",
+  "location",
+  "dateOfBirth",
+]);
+
+// ---- Local-only date helpers (avoid UTC parsing drift) ----
+const formatYMD = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+
+const ymdToDateLocal = (ymd: string) => {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(y, (m ?? 1) - 1, d ?? 1); // local midnight
+};
+
+function buildScheduleParts(p: {
+  eventType?: "single" | "multiple";
+  startDate?: string;
+  endDate?: string;
+  timeStart?: string;
+  timeEnd?: string;
+}) {
+  const startLong = formatYMDToLong(p.startDate);
+  const endLong   = formatYMDToLong(p.endDate);
+  const timeStart = formatHHmmTo12h(p.timeStart);
+  const timeEnd   = formatHHmmTo12h(p.timeEnd);
+
+  const timePart =
+    timeStart || timeEnd
+      ? `${timeStart || ""}${timeStart && timeEnd ? " - " : ""}${timeEnd || ""}`
+      : "";
+
+  const sameDay = p.startDate && p.endDate && p.startDate === p.endDate;
+  const datePart =
+    p.eventType === "single" || sameDay ? startLong : `${startLong} - ${endLong}`;
+
+  return { datePart, timePart };
+}
+
+// Age helpers
+function computeAgeFromDOB(dobYMD: string): number | null {
+  if (!dobYMD || !/^\d{4}-\d{2}-\d{2}$/.test(dobYMD)) return null;
+  const [y, m, d] = dobYMD.split("-").map(Number);
+  const dob = new Date(y, m - 1, d);
+  if (Number.isNaN(dob.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - dob.getFullYear();
+  const mDiff = now.getMonth() - dob.getMonth();
+  if (mDiff < 0 || (mDiff === 0 && now.getDate() < dob.getDate())) {
+    age--;
+  }
+  return age >= 0 && age <= 200 ? age : null;
+}
+
+const IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tiff", ".svg"];
+const isImageMime = (t: string) => t.startsWith("image/");
+const isPdfMime = (t: string) => t === "application/pdf";
+const hasAllowedExt = (name: string) => {
+  const n = name.toLowerCase();
+  return n.endsWith(".pdf") || IMAGE_EXTS.some((e) => n.endsWith(e));
+};
+const detectContentType = (f: File) => {
+  if (f.type && (isImageMime(f.type) || isPdfMime(f.type))) return f.type;
+  if (f.name.toLowerCase().endsWith(".pdf")) return "application/pdf";
+  return "image/*";
+};
+const isAllowedFile = (f: File) => {
+  if (!f) return false;
+  if (f.type) return isImageMime(f.type) || isPdfMime(f.type);
+  return hasAllowedExt(f.name);
+};
+
+type SimpleField = { name: string; description?: string };
+
+const PRETTY_LABELS: Record<string, string> = {
+  dayChosen: "Chosen Day",
+  firstName: "First Name",
+  lastName: "Last Name",
+  contactNumber: "Contact Number",
+  emailAddress: "Email Address",
+  location: "Location",
+  validIDjpg: "Valid ID",
+  dateOfBirth: "Date of Birth",
+};
+
+// Fields used for VOLUNTEER form (we need DOB here to enforce 17+)
+const PREDEFINED_REQ_TEXT: SimpleField[] = [
+  { name: "firstName" },
+  { name: "lastName" },
+  { name: "contactNumber" },
+  { name: "emailAddress" },
+  { name: "location" },
+  { name: "dateOfBirth" }, // DOB required for volunteers
+];
+
+const PREDEFINED_REQ_FILES: SimpleField[] = [
+  { name: "validIDjpg" },
+];
+
+type AgeRestriction = {
+  noAgeLimit?: boolean;
+  minAge?: number | null;
+  maxAge?: number | null;
+};
+
+type Program = {
+  id: string;
+  programName: string;
+  summary?: string;
+  description?: string;
+  eventType?: "single" | "multiple";
+  startDate?: string;
+  endDate?: string;
+  timeStart?: string;
+  timeEnd?: string;
+  location?: string;
+  participants?: number;
+  volunteers?: number;
+  approvalStatus?: "Approved" | "Pending" | "Rejected";
+  progressStatus?: "Ongoing" | "Upcoming" | "Completed" | "Rejected";
+  activeStatus?: "Active" | "Inactive";
+  eligibleParticipants?: "resident" | "non-resident" | "both";
+  photoURL?: string | null;
+  photoURLs?: string[];
+  noParticipantLimit?: boolean;
+  participantDays?: number[];
+  noParticipantLimitList?: boolean[];
+  approvedParticipantCountList?: number[];
+  requirements?: {
+    textFields?: { name: string }[];
+    fileFields?: { name: string }[];
+  };
+  ageRestriction?: AgeRestriction; // used for PARTICIPANTS only
+};
+
+type Role = "Volunteer" | "Participant";
+
+type Preview = { url: string; isPdf: boolean; isObjectUrl: boolean };
+
+export default function SpecificProgram() {
+  const router = useRouter();
+
+  const { id } = useParams();
+  const searchParams = useSearchParams();
+  const { user } = useAuth();
+
+  const actions = useMemo(
+    () => [
+      {
+        key: "Volunteer" as Role,
+        title: "Volunteer",
+        description: "Join our community efforts and make a direct impact by volunteering.",
+        icon: <Users className="icon" />,
+      },
+      {
+        key: "Participant" as Role,
+        title: "Register",
+        description: "Attend community events and activities to stay engaged and connected.",
+        icon: <Handshake className="icon" />,
+      },
+    ],
+    []
+  );
+  const [dayChosen, setDayChosen] = useState<number | null>(null);
+  const [program, setProgram] = useState<Program | null>(null);
+  const [images, setImages] = useState<string[]>([]);
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [selectedAction, setSelectedAction] = useState<null | Role>(null);
+
+  const [formData, setFormData] = useState<Record<string, string>>({});
+  const [files, setFiles] = useState<Record<string, File>>({});
+
+  // previews for chosen files
+  const [filePreviews, setFilePreviews] = useState<Record<string, Preview>>({});
+  const previewsRef = useRef<Record<string, Preview>>({});
+
+  const [isVerifiedResident, setIsVerifiedResident] = useState(false);
+  const [residentId, setResidentId] = useState<string | null>(null);
+  const [alreadyRegistered, setAlreadyRegistered] = useState(false);
+
+  // role-specific approved counts
+  const [approvedParticipantCount, setApprovedParticipantCount] = useState<number>(0);
+  const [approvedParticipantCountList, setApprovedParticipantCountList] = useState<number[]>([]);
+
+  const [approvedVolunteerCount, setApprovedVolunteerCount] = useState<number>(0);
+
+  // prefilled ID for verified users
+  const [preVerifiedIdUrl, setPreVerifiedIdUrl] = useState<string | null>(null);
+
+  //Popups
+  const [showSubmitPopup, setShowSubmitPopup] = useState<boolean>(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const [pendingRole, setPendingRole] = useState<Role | null>(null);
+
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMsg, setToastMsg] = useState("");
+  const [toastError, setToastError] = useState(false);
+  const showToast = (msg: string, isError = false, ms = 1800) => {
+    setToastMsg(msg);
+    setToastError(isError);
+    setToastVisible(true);
+    setTimeout(() => setToastVisible(false), ms);
+  };
+
+  const [lockedFields, setLockedFields] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    const load = async () => {
+      const snap = await getDoc(doc(db, "Programs", id as string));
+      if (!snap.exists()) return setProgram(null);
+      const p = { id: snap.id, ...snap.data() } as Program;
+      setProgram(p);
+
+      const fromQuery = searchParams.getAll("image");
+      const img =
+        (p.photoURLs && p.photoURLs.length > 0) ? p.photoURLs :
+        (p.photoURL ? [p.photoURL] : fromQuery);
+      setImages(img || []);
+
+      // fetch role-specific approved counts
+      const base = collection(db, "ProgramsParticipants");
+      const [pCnt, vCnt] = await Promise.all([
+        getCountFromServer(
+          query(
+            base,
+            where("programId", "==", snap.id),
+            where("approvalStatus", "==", "Approved"),
+            where("role", "==", "Participant")
+          )
+        ),
+        getCountFromServer(
+          query(
+            base,
+            where("programId", "==", snap.id),
+            where("approvalStatus", "==", "Approved"),
+            where("role", "==", "Volunteer")
+          )
+        ),
+      ]);
+
+      if (p.eventType === "multiple") {
+        const counts: number[] = [];
+        if (p.participantDays && p.participantDays.length > 0) {
+          for (let index = 0; index < p.participantDays.length; index++) {
+            const c = await getCountFromServer(
+              query(
+                base,
+                where("programId", "==", snap.id),
+                where("approvalStatus", "==", "Approved"),
+                where("role", "==", "Participant"),
+                where("dayChosen", "==", index)
+              )
+            );
+            counts.push(c.data().count || 0);
+          }
+          setApprovedParticipantCountList(counts);
+        }
+      }
+      setApprovedParticipantCount(pCnt.data().count || 0);
+      setApprovedVolunteerCount(vCnt.data().count || 0);
+    };
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  useEffect(() => {
+  if (program?.eventType === "single") {
+    // always treat single-day as Day 0 internally
+    setDayChosen(0);
+  }
+}, [program?.eventType]);
+    
+
+
+
+  useEffect(() => {
+    if (!images.length) return;
+    const t = setInterval(() => setCurrentSlide((s) => (s + 1) % images.length), 6000);
+    return () => clearInterval(t);
+  }, [images]);
+
+  const isSameLocalDay = (a: Date, b: Date) => {
+    return a.getFullYear() === b.getFullYear() &&
+           a.getMonth() === b.getMonth() &&
+           a.getDate() === b.getDate();
+  };
+
+  const hasEndedToday = (day: Date, timeEnd?: string) => {
+    if (!timeEnd) return false; // no end time -> do not mark as ended
+    const [hStr, mStr] = timeEnd.split(":");
+    const h = Number(hStr);
+    const m = Number(mStr ?? "0");
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return false;
+
+    // build "today at timeEnd" on the *local* day for this option
+    const end = new Date(day);
+    end.setHours(h, m, 0, 0);
+
+    const now = new Date();
+    return isSameLocalDay(day, now) && now > end;
+  };
+
+  // try to prefill user info
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!user?.uid) {
+        setIsVerifiedResident(false);
+        setResidentId(null);
+        setAlreadyRegistered(false);
+        setPreVerifiedIdUrl(null);
+        return;
+      }
+
+      const userDocRef = doc(db, "ResidentUsers", user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      if (!userDocSnap.exists()) return;
+
+      const u: any = userDocSnap.data();
+      const verified = u.status === "Verified";
+      const rId: string | null = u.residentId || null;
+
+      setIsVerifiedResident(Boolean(verified && rId));
+      setResidentId(rId);
+
+      let candidateUrl: string | null = null;
+      const userUrls: unknown = u?.verificationFilesURLs;
+      if (Array.isArray(userUrls) && userUrls.length > 0 && typeof userUrls[0] === "string") {
+        candidateUrl = userUrls[0] as string;
+      }
+
+      if (verified && rId) {
+        const resRef = doc(db, "Residents", rId);
+        const resSnap = await getDoc(resRef);
+        if (resSnap.exists()) {
+          const rd: any = resSnap.data();
+
+          const resUrls: unknown = rd?.verificationFilesURLs;
+          if (Array.isArray(resUrls) && resUrls.length > 0 && typeof resUrls[0] === "string") {
+            candidateUrl = (resUrls[0] as string) || candidateUrl;
+          }
+
+          const fullName = `${rd.firstName || ""} ${rd.middleName || ""} ${rd.lastName || ""}`
+            .replace(/\s+/g, " ")
+            .trim();
+
+          setFormData((prev) => {
+            const next = {
+              ...prev,
+              firstName: rd.firstName || prev.firstName || "",
+              lastName: rd.lastName || prev.lastName || "",
+              contactNumber: rd.contactNumber || prev.contactNumber || "",
+              emailAddress: u.email || prev.emailAddress || "",
+              location: rd.address || prev.location || "",
+              fullName: fullName || prev.fullName || "",
+              dateOfBirth: rd.dateOfBirth || prev.dateOfBirth || "",
+            };
+            // lock any predefined fields we just prefilled with non-empty values
+            const newLocks: Record<string, boolean> = { ...lockedFields };
+            for (const k of Object.keys(next)) {
+              if (LOCKABLE_PREDEFINED.has(k) && next[k as keyof typeof next]) newLocks[k] = true;
+            }
+            setLockedFields(newLocks);
+            return next;
+          });
+        } else {
+          const fullName = `${u.first_name || ""} ${u.middle_name || ""} ${u.last_name || ""}`
+            .replace(/\s+/g, " ")
+            .trim();
+          setFormData((prev) => {
+            const next = {
+              ...prev,
+              firstName: u.first_name || prev.firstName || "",
+              lastName: u.last_name || prev.lastName || "",
+              contactNumber: u.phone || prev.contactNumber || "",
+              emailAddress: u.email || prev.emailAddress || "",
+              location: u.address || prev.location || "",
+              fullName: fullName || prev.fullName || "",
+            };
+            const newLocks: Record<string, boolean> = { ...lockedFields };
+            for (const k of Object.keys(next)) {
+              if (LOCKABLE_PREDEFINED.has(k) && next[k as keyof typeof next]) newLocks[k] = true;
+            }
+            setLockedFields(newLocks);
+            return next;
+          });
+        }
+      } else {
+        const fullName = `${u.first_name || ""} ${u.middle_name || ""} ${u.last_name || ""}`
+          .replace(/\s+/g, " ")
+          .trim();
+        setFormData((prev) => {
+          const next = {
+            ...prev,
+            firstName: u.first_name || prev.firstName || "",
+            lastName: u.last_name || prev.lastName || "",
+            contactNumber: u.phone || prev.contactNumber || "",
+            emailAddress: u.email || prev.emailAddress || "",
+            location: u.address || prev.location || "",
+            fullName: fullName || prev.fullName || "",
+          };
+          const newLocks: Record<string, boolean> = { ...lockedFields };
+          for (const k of Object.keys(next)) {
+            if (LOCKABLE_PREDEFINED.has(k) && next[k as keyof typeof next]) newLocks[k] = true;
+          }
+          setLockedFields(newLocks);
+          return next;
+        });
+      }
+
+      setPreVerifiedIdUrl(candidateUrl || null);
+    };
+    fetchUserData();
+  }, [user]);
+
+  // check duplicate (FIXED single-day branch)
+  useEffect(() => {
+    const checkDup = async () => {
+      if (!program?.id || !residentId) {
+        setAlreadyRegistered(false);
+        return;
+      }
+      const dupQ = query(
+        collection(db, "ProgramsParticipants"),
+        where("programId", "==", program.id),
+        where("residentId", "==", residentId)
+      );
+      const snap = await getDocs(dupQ);
+
+      // if first doc has attendance === false, allow re-register check
+      if (snap?.docs[0]?.data().attendance === false) {
+        setAlreadyRegistered(false);
+      } else {
+        setAlreadyRegistered(!snap.empty);
+      }
+
+      const participantData = snap.docs[0]?.data?.() || snap.docs[0]?.data();
+      const attendance = participantData?.attendance;
+      const chosenIdx = participantData?.dayChosen as number | null | undefined;
+
+      // multi-day: allow re-register if absent and day already passed
+      if (program.startDate && program.eventType === "multiple" && chosenIdx != null) {
+        const startLocal = ymdToDateLocal(program.startDate);
+        const chosenDate = new Date(startLocal);
+        chosenDate.setDate(startLocal.getDate() + chosenIdx);
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        chosenDate.setHours(0, 0, 0, 0);
+
+        if (attendance === false && chosenDate < today) {
+          setAlreadyRegistered(false);
+        } else if (attendance === true) {
+          setAlreadyRegistered(true);
+        } else {
+          setAlreadyRegistered(true);
+        }
+      } else if (program.eventType === "single") {
+        // ✅ FIX: only mark as registered if there is actually a doc
+        setAlreadyRegistered(!snap.empty);
+      }
+    };
+    checkDup();
+  }, [program?.id, program?.eventType, program?.startDate, residentId]);
+
+  // form handlers
+  const onTextChange = (field: string, value: string) =>
+    setFormData((p) => ({ ...p, [field]: value }));
+
+  const onFileChange = (field: string, inputEl: HTMLInputElement) => {
+    const f = inputEl.files?.[0] || null;
+    if (!f) return;
+    if (!isAllowedFile(f)) {
+      showToast("Only image files or PDF are allowed.", true);
+      inputEl.value = "";
+      return;
+    }
+    setFiles((p) => ({ ...p, [field]: f }));
+
+    setFilePreviews((prev) => {
+      const next = { ...prev };
+      const old = prev[field];
+      if (old?.isObjectUrl) URL.revokeObjectURL(old.url);
+
+      const url = URL.createObjectURL(f);
+      const isPdf = (f.type || "").toLowerCase().includes("pdf") || f.name.toLowerCase().endsWith(".pdf");
+      next[field] = { url, isPdf, isObjectUrl: true };
+      previewsRef.current = next;
+      return next;
+    });
+  };
+
+  // revoke object URLs on unmount
+  useEffect(() => {
+    return () => {
+      for (const pv of Object.values(previewsRef.current)) {
+        if (pv.isObjectUrl) URL.revokeObjectURL(pv.url);
+      }
+    };
+  }, []);
+
+  // capacity
+  const maxParticipants = Number(program?.participants ?? 0);
+  const volunteersCap   = Number(program?.volunteers ?? 0);
+  const hasVolunteerCap = volunteersCap > 0;
+
+  const capacityReached = (role: Role, index?: number) => {
+    if (!program) return false;
+    if (role === "Participant") {
+      if (program.eventType === "single") {
+        if (program.noParticipantLimit) return false; // no cap for single-day with no limit
+        if (maxParticipants <= 0) return true;
+        return approvedParticipantCount >= maxParticipants;
+      }
+      if (program.eventType === "multiple" && index !== undefined && program.approvedParticipantCountList) {
+        const dayLimit =
+          program.noParticipantLimitList && program.noParticipantLimitList[index]
+            ? 0
+            : (program.participantDays && program.participantDays[index]) ? program.participantDays[index] : 0;
+        const approvedCountForDay =
+          approvedParticipantCountList && approvedParticipantCountList[index]
+            ? approvedParticipantCountList[index]
+            : 0;
+
+        if (program.noParticipantLimitList && program.noParticipantLimitList[index]) return false;
+        if (dayLimit <= 0) return true;
+        return approvedCountForDay >= dayLimit;
+      }
+    }
+    if (!hasVolunteerCap) return false;
+    if (volunteersCap <= 0) return true;
+    return approvedVolunteerCount >= volunteersCap;
+  };
+
+  const capacityMessage = (role: Role) =>
+    role === "Participant"
+      ? "Max limit of participants has been reached!"
+      : "Max limit of volunteers has been reached!";
+
+  // audience gating
+  const ep = program?.eligibleParticipants || "both";
+  const { user: authUser } = useAuth();
+  const isResident = isVerifiedResident;
+  const isNonResident = !isResident;
+
+  const userAllowedAtAll =
+    ep === "both" ||
+    (ep === "resident" && isResident) ||
+    (ep === "non-resident" && isNonResident);
+
+  const canShowParticipantCard =
+    userAllowedAtAll &&
+    ((ep === "resident" && isResident) ||
+      (ep === "non-resident" && isNonResident) ||
+      ep === "both");
+
+  const canShowVolunteerCard =
+    userAllowedAtAll &&
+    isResident &&
+    (ep === "resident" || ep === "both") &&
+    hasVolunteerCap;
+
+  // derived age
+  const userDOB = formData.dateOfBirth || "";
+  const userAge = useMemo(() => computeAgeFromDOB(userDOB), [userDOB]);
+
+  // build participant age limit text
+  const participantAgeLimitText = useMemo(() => {
+    const ar = program?.ageRestriction;
+    if (!ar || ar.noAgeLimit) return null;
+
+    const min = ar.minAge ?? null;
+    const max = ar.maxAge ?? null;
+    const nilOrZero = (v: number | null | undefined) => v == null || v === 0;
+
+    if (nilOrZero(min) && nilOrZero(max)) return null;
+
+    if (!nilOrZero(min) && !nilOrZero(max)) return `${min}-${max}`;
+    if (!nilOrZero(min)) return `${min}+`;
+    if (!nilOrZero(max)) return `≤ ${max}`;
+    return null;
+  }, [program?.ageRestriction]);
+
+  // age eligibility check (role-aware)
+  const checkAgeEligibility = (role: Role): { ok: boolean; msg?: string } => {
+    if (role === "Volunteer") {
+      if (!userDOB) return { ok: false, msg: "Please enter your Date of Birth." };
+      const age = userAge;
+      if (age == null) return { ok: false, msg: "Invalid Date of Birth." };
+      if (age < 17) return { ok: false, msg: "Volunteers must be at least 17 years old." };
+      return { ok: true };
+    }
+
+    const ar = program?.ageRestriction;
+    if (!ar || ar.noAgeLimit) return { ok: true };
+    if (!userDOB) return { ok: false, msg: "Please enter your Date of Birth." };
+    const age = userAge;
+    if (age == null) return { ok: false, msg: "Invalid Date of Birth." };
+    if (ar.minAge != null && age < ar.minAge) {
+      return { ok: false, msg: `Minimum age is ${ar.minAge}.` };
+    }
+    if (ar.maxAge != null && age > ar.maxAge) {
+      return { ok: false, msg: `Maximum age is ${ar.maxAge}.` };
+    }
+    return { ok: true };
+  };
+
+  const checkEligibilityForRole = (role: Role): { ok: boolean; msg?: string } => {
+    if (!program) return { ok: false };
+
+    if (
+      program.progressStatus === "Rejected" ||
+      program.progressStatus === "Completed" ||
+      program.activeStatus === "Inactive"
+    ) {
+      return { ok: false, msg: "Enrollment is closed for this program." };
+    }
+
+    if (!userAllowedAtAll) {
+      return {
+        ok: false,
+        msg:
+          ep === "resident"
+            ? "Only Verified Resident Users can participate."
+            : "This program is for non-residents only.",
+      };
+    }
+
+    if (role === "Volunteer") {
+      if (!isResident) return { ok: false, msg: "Only Verified Resident Users can volunteer." };
+      if (!hasVolunteerCap) return { ok: false, msg: "Volunteering is not available for this program." };
+    }
+
+    if (program.eventType === "multiple" && role === "Participant" && dayChosen == null) {
+      return { ok: false, msg: "Please select a day." };
+    }
+
+    const reached = program.eventType === "multiple" && role === "Participant"
+      ? capacityReached(role, dayChosen ?? undefined)
+      : capacityReached(role);
+
+    if (reached) {
+      return { ok: false, msg: capacityMessage(role) };
+    }
+
+    const ageGate = checkAgeEligibility(role);
+    if (!ageGate.ok) return ageGate;
+
+    return { ok: true };
+  };
+
+  const uploadAllFiles = async (
+    programId: string,
+    uidOrGuest: string,
+    prefilled: Record<string, string>
+  ) => {
+    const urls: Record<string, string> = { ...prefilled };
+
+    for (const key of Object.keys(files)) {
+      if (urls[key]) continue;
+      const f = files[key];
+      const sref = ref(
+        storage,
+        `Programs/${programId}/participantUploads/${uidOrGuest}/${Date.now()}-${key}-${f.name}`
+      );
+      await uploadBytes(sref, f, { contentType: detectContentType(f) });
+      urls[key] = await getDownloadURL(sref);
+    }
+    return urls;
+  };
+
+  const handleSubmit = async (role: Role) => {
+    if (!program) return;
+    const gate = checkEligibilityForRole(role);
+    if (!gate.ok) return showToast(gate.msg || "Not eligible.", true);
+
+    if (residentId && alreadyRegistered) {
+      return showToast("You are already enlisted in this program.", true);
+    }
+
+    const prefilled: Record<string, string> = {};
+    if (isVerifiedResident && preVerifiedIdUrl) {
+      prefilled["validIDjpg"] = preVerifiedIdUrl;
+    }
+
+    const uidOrGuest = user?.uid || "guest";
+    const uploadedFiles = await uploadAllFiles(program.id, uidOrGuest, prefilled);
+
+    try {
+      const registrantName =
+        (formData.fullName ||
+          `${formData.firstName || ""} ${formData.lastName || ""}`.trim()) || "Unknown";
+
+      const newRegRef = await addDoc(collection(db, "ProgramsParticipants"), {
+        programId: program.id,
+        programName: program.programName,
+        residentId: residentId || null,
+        role,
+        approvalStatus: "Pending",
+        addedVia: user?.uid ? "resident-form" : "guest-form",
+        createdAt: serverTimestamp(),
+        fullName:
+          formData.fullName ||
+          `${formData.firstName || ""} ${formData.lastName || ""}`.trim(),
+        firstName: formData.firstName || "",
+        lastName: formData.lastName || "",
+        contactNumber: formData.contactNumber || "",
+        emailAddress: formData.emailAddress || "",
+        location: formData.location || "",
+        dateOfBirth: formData.dateOfBirth || "",
+        age: userAge ?? null,
+        fields: formData,
+        files: uploadedFiles,
+        dayChosen:
+            program.eventType === "multiple"
+              ? (dayChosen ?? 0)
+              : 0, 
+      });
+
+      const roleLabel = role === "Volunteer" ? "volunteer" : "participant";
+      await addDoc(collection(db, "BarangayNotifications"), {
+        message: `A new ${roleLabel} has registered for ${program.programName}. Name: ${registrantName}.`,
+        timestamp: new Date(),
+        isRead: false,
+        transactionType: "Program Registration",
+        recipientRole: "Assistant Secretary",
+        participantID: newRegRef.id,
+        programID: program.id,
+        accID: user?.uid || "",
+      });
+
+      if (user?.uid) {
+        await addDoc(collection(db, "Notifications"), {
+          message: `You have successfully registered as a ${roleLabel} for ${program.programName}. Please wait to be contacted regarding your registration status.`,
+          timestamp: new Date(),
+          isRead: false,
+          transactionType: "Program Registration",
+          participantID: newRegRef.id,
+          recipientUid: user.uid,
+          residentID: residentId || user.uid,
+          programId: program.id,
+        });
+      }
+      router.push("/Programs/Notification");
+    } catch {
+      showToast("Something went wrong. Please try again.", true);
+    }
+  };
+
+  // open popup
+  const handleSubmitClick = (role: Role) => {
+    setPendingRole(role);
+    setShowSubmitPopup(true);
+  };
+
+  // confirm from popup
+  const confirmSubmit = async () => {
+    setShowSubmitPopup(false);
+    if (pendingRole) {
+      await handleSubmit(pendingRole);
+      setPendingRole(null);
+    }
+  };
+
+  // 🔒 Derive which days are FULL (multi-day participants)
+  const dayFullList = useMemo<boolean[]>(() => {
+    if (!program || program.eventType !== "multiple" || !program.participantDays) return [];
+    return program.participantDays.map((cap, idx) => {
+      const noLimit = !!(program.noParticipantLimitList && program.noParticipantLimitList[idx]);
+      if (noLimit) return false; // unlimited -> never full
+      const capNum = Number(cap);
+      if (!Number.isFinite(capNum) || capNum <= 0) return true; // invalid/zero cap -> treat as full
+      const approved = approvedParticipantCountList?.[idx] ?? 0;
+      return approved >= capNum;
+    });
+  }, [program?.eventType, program?.participantDays, program?.noParticipantLimitList, approvedParticipantCountList]);
+
+  const dayEndedList = useMemo<boolean[]>(() => {
+    if (!program || program.eventType !== "multiple" || !program.participantDays) return [];
+    const sYMD = program.startDate || "";
+    const startLocal = sYMD ? ymdToDateLocal(sYMD) : new Date();
+
+    return program.participantDays.map((_, idx) => {
+      const d = new Date(startLocal);
+      d.setDate(startLocal.getDate() + idx);
+      return hasEndedToday(d, program.timeEnd);
+    });
+  }, [program?.eventType, program?.participantDays, program?.startDate, program?.timeEnd]);
+
+  // If the selected day becomes full (or is invalid), clear it
+  useEffect(() => {
+    if (dayChosen == null) return;
+    if (dayFullList[dayChosen]) setDayChosen(null);
+  }, [dayFullList, dayChosen]);
+
+  useEffect(() => {
+    if (dayChosen == null) return;
+    if (dayFullList[dayChosen] || dayEndedList[dayChosen]) setDayChosen(null);
+  }, [dayFullList, dayEndedList, dayChosen]);
+
+  if (!program) {
+    return (
+      <main className="main-container-specific">
+        <div className="headerpic-specific"><p>PROGRAMS</p></div>
+      </main>
+    );
+  }
+
+  const { datePart, timePart } = buildScheduleParts({
+    eventType: program.eventType,
+    startDate: program.startDate,
+    endDate: program.endDate,
+    timeStart: program.timeStart,
+    timeEnd: program.timeEnd,
+  });
+
+  // Numeric, role-aware labels
+  const volunteersLabel   = hasVolunteerCap ? `${approvedVolunteerCount}/${volunteersCap}` : "";
+
+  // toast position
+  const toastPosStyle: React.CSSProperties = { top: "13%", right: 12, left: "auto", bottom: "auto" };
+
+  // which action cards to show
+  const visibleActions = actions.filter((a) =>
+    a.key === "Participant" ? canShowParticipantCard : canShowVolunteerCard
+  );
+
+  // audience block message
+  const audienceBlockedMsg =
+    !userAllowedAtAll
+      ? (program.eligibleParticipants === "resident"
+          ? "Only Verified Resident Users can participate."
+          : "This program is for non-residents only.")
+      : "";
+
+  // helper to render label
+  const renderPrettyLabel = (name: string) => {
+    const fromDict = PRETTY_LABELS[name];
+    if (fromDict) return fromDict;
+    return name
+      .replace(/jpg$/i, "")
+      .replace(/jpeg$/i, "")
+      .replace(/png$/i, "")
+      .replace(/pdf$/i, "")
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+      .replace(/^./, (s) => s.toUpperCase())
+      .replace(/\bId\b/g, "ID");
+  };
+
+  // whether participant DOB should be required (only when program sets an age restriction)
+  const participantDOBRequired = !!(program?.ageRestriction && !program.ageRestriction.noAgeLimit);
+
+  // NEW: single-day programs that are already Ongoing should only allow walk-in
+  const isSingleOngoing =
+    program.eventType === "single" && program.progressStatus === "Ongoing";
+
+  return (
+    <main className="main-container-specific">
+      <div className="headerpic-specific">
+        <p>PROGRAMS</p>
+      </div>
+
+      <section className="programs-header-specific">
+        <h1 className="programs-title-specific">{program.programName}</h1>
+        <div className="programs-underline-specific"></div>
+
+        <div className="slideshow-container-specific">
+          {images.length > 0 && (
+            <>
+              <div className="slideshow-specific">
+                {images.map((img, index) => (
+                  <img
+                    key={index}
+                    src={img}
+                    alt={`Slide ${index + 1}`}
+                    className={`slideshow-image-specific ${index === currentSlide ? "active" : ""}`}
+                  />
+                ))}
+              </div>
+
+              <div className="slideshow-dots-specific">
+                {images.map((_, index) => (
+                  <span
+                    key={index}
+                    className={`dot-specific ${index === currentSlide ? "active" : ""}`}
+                    onClick={() => setCurrentSlide(index)}
+                  ></span>
+                ))}
+              </div>
+            </>
+          )}
+
+        </div>
+
+        <p className="programs-description-specific">
+          {program.description || program.summary}
+        </p>
+
+        <div className="programs-details-specific">
+          <div className="program-detail-card-specific">
+            <h3>Schedule</h3>
+            <div className="values">
+              <p> {datePart} </p>
+              <p> {timePart} </p>
+            </div>
+          </div>
+
+          <div className="program-detail-card-specific">
+            <h3>Location</h3>
+            <div className="values">
+              <p>{program.location || ""}</p>
+            </div>
+          </div>
+
+          {program.eventType === "single" ? (
+            <>
+              <div className="program-detail-card-specific">
+                <h3>Participants</h3>
+                <div className="values">
+                  <p>
+                    {program.noParticipantLimit ? (
+                      <>{approvedParticipantCount}</>
+                    ) : (
+                      <>
+                        {approvedParticipantCount}/{Math.max(0, Number(program.participants ?? 0))}
+                      </>
+                    )}
+                  </p>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {program.noParticipantLimitList && program.participantDays && program.participantDays.length > 0 && (
+                <>
+                  {program.participantDays.map((day, index) => {
+                    // local date math & correct index (Day 1 = +0)
+                    const sYMD = program.startDate || "";
+                    const startLocal = sYMD ? ymdToDateLocal(sYMD) : new Date();
+                    const date = new Date(startLocal);
+                    date.setDate(startLocal.getDate() + index);
+                    const ymd = formatYMD(date);
+
+                    return (
+                      <div className="program-detail-card-specific" key={index}>
+                        <h3>
+                          Participants (Day {index + 1}) {formatYMDToLong(ymd)}
+                        </h3>
+                        <div className="values">
+                          <p>
+                            {program.noParticipantLimitList && program.noParticipantLimitList[index] ? (
+                              <>
+                                {approvedParticipantCountList && approvedParticipantCountList.length > index
+                                  ? approvedParticipantCountList[index]
+                                  : 0}
+                              </>
+                            ) : (
+                              <>
+                                {approvedParticipantCountList && approvedParticipantCountList.length > index
+                                  ? approvedParticipantCountList[index]
+                                  : 0}
+                                /{Math.max(0, day)}
+                              </>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+            </>
+          )}
+
+          {hasVolunteerCap && (
+            <div className="program-detail-card-specific">
+              <h3>Volunteers</h3>
+              <div className="values">
+                <p>{volunteersLabel}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Age Limit box */}
+          <div className="program-detail-card-specific">
+            <h3>Age Limit</h3>
+            <div className="values">
+              <span>Volunteers: 17+ years old</span>
+              <span>Participants: {participantAgeLimitText ? `${participantAgeLimitText} years old` : "None"}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="get-involved">
+        <h2 className="section-title">Get Involved</h2>
+
+        {isVerifiedResident && alreadyRegistered ? (
+          <div className="program-detail-card-specific">
+            <div className="status-header">
+              <img src="/Images/check.png" alt="Registered" className="status-icon" />
+              <h3>Status</h3>
+            </div>
+            <p className="status-message">
+              You have already registered for this event. Please wait for further instructions.
+            </p>
+          </div>
+        ) : isSingleOngoing ? (
+          <div className="program-detail-card-specific">
+            <div className="status-header">
+              <img src="/Images/prohibition.png" alt="Ongoing" className="status-icon" />
+              <h3>Program Ongoing</h3>
+            </div>
+            <p className="status-message">
+              Program is already Ongoing. If you are an eligible participant, you may register as a walk-in at the venue.
+            </p>
+          </div>
+        ) : audienceBlockedMsg ? (
+          <div className="program-detail-card-specific">
+            <div className="status-header">
+              <img src="/Images/prohibition.png" alt="Blocked" className="status-icon" />
+              <h3>Notice</h3>
+            </div>
+            <p className="status-message">{audienceBlockedMsg}</p>
+          </div>
+        ) : (
+          <div className="actions-grid">
+            {visibleActions
+              .filter((a) => !selectedAction || selectedAction === a.key)
+              .map((action, index) => {
+                let reached = false;
+                if (program.eventType === "multiple" && action.key === "Participant") {
+                  if (dayChosen !== null) {
+                    reached = capacityReached(action.key, dayChosen);
+                  } else {
+                    reached = false;
+                  }
+                } else {
+                  reached = capacityReached(action.key);
+                }
+
+                let disabledReason = "";
+                if (program.eventType === "single" && program.noParticipantLimit) {
+                  reached = false;
+                } else {
+                  disabledReason = reached ? capacityMessage(action.key) : "";
+                }
+
+                const textFields: SimpleField[] =
+                  action.key === "Volunteer"
+                    ? PREDEFINED_REQ_TEXT
+                    : (program.requirements?.textFields || []);
+
+                const fileFields: SimpleField[] =
+                  action.key === "Volunteer"
+                    ? PREDEFINED_REQ_FILES
+                    : (program.requirements?.fileFields || []);
+
+                return (
+                  <motion.div
+                    key={index}
+                    layout
+                    className={`action-card ${selectedAction === action.key ? "expanded" : ""} ${reached ? "disabled" : ""}`}
+                  >
+                    {selectedAction === action.key && (
+                      <img
+                        src="/Images/left-arrow.png"
+                        alt="Left Arrow"
+                        className="back-btn"
+                        onClick={() => setSelectedAction(null)}
+                      />
+                    )}
+
+                    <div
+                      className="card-content-wrapper"
+                      onClick={() => {
+                        if (!selectedAction && !reached) setSelectedAction(action.key);
+                      }}
+                      style={reached ? { cursor: "not-allowed", opacity: 0.75 } : undefined}
+                    >
+                      <div className="icon">{action.icon}</div>
+                      <h3>{action.title}</h3>
+                      <p>{reached ? disabledReason : action.description}</p>
+                    </div>
+
+                    {!reached && selectedAction === action.key && (
+                      <AnimatePresence>
+                        <motion.form
+                          ref={formRef}
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            handleSubmitClick(action.key); // show popup first
+                          }}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 20 }}
+                          transition={{ duration: 0.4 }}
+                          className="register-form-specific"
+                        >
+                          {textFields.map((f, i) => {
+                            const name = f.name;
+
+                            if (name === "dateOfBirth") {
+                              const today = new Date();
+                              const todayStr = [
+                                today.getFullYear(),
+                                String(today.getMonth() + 1).padStart(2, "0"),
+                                String(today.getDate()).padStart(2, "0"),
+                              ].join("-");
+
+                              const ageLabel = "Age";
+                              const requireDOB =
+                                action.key === "Volunteer" ? true : participantDOBRequired;
+
+                              return (
+                                <div className="form-group-specific" key={`tf-dob-${i}`}>
+                                  <label className="form-label-specific">
+                                    Date of Birth {requireDOB && <span className="required">*</span>}
+                                  </label>
+                                  <input
+                                    type="date"
+                                    className="form-input-specific"
+                                    required={requireDOB}
+                                    max={todayStr}
+                                    value={formData.dateOfBirth || ""}
+                                    onChange={(e) => onTextChange("dateOfBirth", e.target.value)}
+                                    disabled={!!lockedFields["dateOfBirth"]}
+
+                                  />
+                                  <div className="form-group-specific-age">
+                                    <label className="form-label-specific">{ageLabel}</label>
+                                    <input
+                                      type="text"
+                                      className="form-input-specific"
+                                      value={
+                                        formData.dateOfBirth
+                                          ? (userAge != null ? `${userAge}` : "")
+                                          : ""
+                                      }
+                                      readOnly
+                                      placeholder="Will be computed"
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            }
+
+if (name === "dayChosen") {
+  const isMultiple = program?.eventType === "multiple";
+
+  // 🔹 SINGLE-DAY: fixed Day 1, disabled select, always value 0
+  if (!isMultiple) {
+    const sYMD = program?.startDate || program?.endDate || "";
+    let label = "Day 1";
+    if (sYMD) {
+      const d = ymdToDateLocal(sYMD); // you already have this helper
+      label = `Day 1 (${d.toDateString()})`;
+    }
+
+    return (
+      <div className="form-group-specific" key={`tf-day-${i}`}>
+        <label className="form-label-specific">
+          {renderPrettyLabel(name)} <span className="required">*</span>
+        </label>
+        <select
+          className="form-input-specific"
+          value={0}     // 🔒 always 0
+          disabled      // user can't change it
+        >
+          <option value={0}>{label}</option>
+        </select>
+      </div>
+    );
+  }
+
+  // 🔹 MULTI-DAY: same behavior as before
+  return (
+    <div className="form-group-specific" key={`tf-day-${i}`}>
+      <label className="form-label-specific">
+        {renderPrettyLabel(name)} <span className="required">*</span>
+      </label>
+      <select
+        className="form-input-specific"
+        required
+        value={dayChosen ?? ""}
+        onChange={(e) => {
+          const val = e.target.value;
+          setDayChosen(val === "" ? null : Number(val));
+        }}
+      >
+        <option value="" disabled>
+          Select a day
+        </option>
+        {program.participantDays?.map((day: number, idx: number) => {
+          // Local date math for each option
+          const sYMD = program.startDate || "";
+          const startLocal = sYMD ? ymdToDateLocal(sYMD) : new Date();
+          const optionDate = new Date(startLocal);
+          optionDate.setDate(startLocal.getDate() + idx);
+
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          optionDate.setHours(0, 0, 0, 0);
+
+          const isPast = optionDate < today;
+          const isFull = !!dayFullList[idx];
+          const isEnded = !!dayEndedList[idx];
+
+          const isToday = optionDate.getTime() === today.getTime();
+          const isOngoingDay =
+            program.progressStatus === "Ongoing" && isToday;
+
+          let label = `Day ${idx + 1} (${optionDate.toDateString()})`;
+          if (isFull) label += " — FULL";
+          if (isEnded) label += " — Day Ended";
+          if (isOngoingDay) label += " — Ongoing (Walk-in only) ";
+
+          const disabled = isPast || isFull || isEnded || isOngoingDay;
+
+          return (
+            <option key={idx} value={idx} disabled={disabled}>
+              {label}
+            </option>
+          );
+        })}
+      </select>
+    </div>
+  );
+}
+
+
+                            const lower = name?.toLowerCase();
+                            const type =
+                              lower.includes("email") ? "email" :
+                              lower.includes("contact") || lower.includes("phone") ? "tel" :
+                              "text";
+
+                            const formattedLabel = renderPrettyLabel(name);
+
+                            return (
+                              <div className="form-group-specific" key={`tf-${i}`}>
+                                <label className="form-label-specific">
+                                  {formattedLabel} <span className="required">*</span>
+                                </label>
+                                <input
+                                  type={type}
+                                  className="form-input-specific"
+                                  required
+                                  value={formData[name] || ""}
+                                  onChange={(e) => onTextChange(name, e.target.value)}
+                                  placeholder={`Enter ${formattedLabel}`}
+                                  disabled={!!lockedFields[name]}
+                                />
+                              </div>
+                            );
+                          })}
+
+                          {fileFields.map((f, i) => {
+                            const nmLower = f.name.toLowerCase();
+                            const isValidIdField = nmLower === "valididjpg";
+                            const usePrefill = isVerifiedResident && !!preVerifiedIdUrl && isValidIdField;
+
+                            const label = renderPrettyLabel(f.name);
+                            const preview = filePreviews[f.name];
+                            const prefillIsPdf = (preVerifiedIdUrl || "").toLowerCase().endsWith(".pdf");
+
+                            return (
+                              <div className="form-group-specific" key={`ff-${i}`}>
+                                <label className="form-label-specific">
+                                  {label} <span className="required">*</span>
+                                </label>
+
+                                {usePrefill || preview?.url ? (
+                                  <div className="prefilled-file-notice">
+                                    {usePrefill ? (
+                                      <>
+                                        {!prefillIsPdf && preVerifiedIdUrl && (
+                                          <a
+                                            href={preVerifiedIdUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            title={`Open ${label} in a new tab`}
+                                          >
+                                            <img
+                                              src={preVerifiedIdUrl}
+                                              alt={`${label} preview`}
+                                              className="prefilled-file-thumbnail"
+                                            />
+                                          </a>
+                                        )}
+                                        <div className="prefilled-file-details">
+                                          <div className="prefilled-file-text">
+                                            Using your verified ID on file.
+                                          </div>
+                                          {preVerifiedIdUrl && (
+                                            <a
+                                              href={preVerifiedIdUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="prefilled-file-link"
+                                            >
+                                              {prefillIsPdf ? "Open PDF in new tab" : "Open full view"}
+                                            </a>
+                                          )}
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <>
+                                        {!preview.isPdf ? (
+                                          <a
+                                            href={preview.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            title={`Open ${label} in a new tab`}
+                                          >
+                                            <img
+                                              src={preview.url}
+                                              alt={`${label} preview`}
+                                              className="prefilled-file-thumbnail"
+                                            />
+                                          </a>
+                                        ) : null}
+
+                                        <div className="prefilled-file-details">
+                                          <div className="prefilled-file-text">
+                                            {preview.isPdf ? "Uploaded PDF" : "Uploaded Image"}
+                                          </div>
+                                          <a
+                                            href={preview.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="prefilled-file-link"
+                                          >
+                                            {preview.isPdf ? "Open PDF in new tab" : "Open full view"}
+                                          </a>
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <input
+                                    type="file"
+                                    accept="image/*,application/pdf,.pdf"
+                                    className="form-input-specific"
+                                    required
+                                    onChange={(e) => onFileChange(f.name, e.currentTarget)}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+
+                          <button type="submit" className="register-button-specific">
+                            {action.key === "Volunteer" ? "Submit Volunteer Form" : "Submit Registration"}
+                          </button>
+                        </motion.form>
+                      </AnimatePresence>
+                    )}
+                  </motion.div>
+                );
+              })}
+          </div>
+        )}
+      </section>
+
+      {toastVisible && (
+        <div
+          className={`popup-overlay-program show${toastError ? " error" : ""}`}
+          style={{
+            ...toastPosStyle,
+            ...(toastError ? { background: "#ad3b3b", borderLeft: "10px solid #7e2929" } : {}),
+          }}
+        >
+          <div className="popup-program">
+            <img
+              src={toastError ? "/Images/warning-1.png" : "/Images/check.png"}
+              alt="icon alert"
+              className="icon-alert"
+            />
+            <p>{toastMsg}</p>
+          </div>
+        </div>
+      )}
+
+      {showSubmitPopup && (
+        <div className="confirmation-popup-overlay-online">
+          <div className="confirmation-popup-online">
+            <img src="/Images/question.png" alt="warning icon" className="successful-icon-popup" />
+            <p>Are you sure you want to submit?</p>
+            <div className="yesno-container-add">
+              <button onClick={() => setShowSubmitPopup(false)} className="no-button-add">No</button>
+              <button onClick={confirmSubmit} className="yes-button-add">Yes</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </main>
+  );
+}
