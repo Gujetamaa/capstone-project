@@ -248,6 +248,7 @@ useEffect(() => {
 
     const handleSMSNotification = async (index:string) => {
         try{
+          /* ClickSend SMS disabled - original fetch commented out
           const response = await fetch("/api/clickSendApi", {
               method: "POST",
               headers: {
@@ -269,10 +270,14 @@ useEffect(() => {
   
           const data = await response.json();
           console.log(data);
+          */
+
+          console.log("ClickSend disabled: would send SMS to respondent", reportData?.respondent?.contact);
         } catch (error) {
             console.error("Error sending SMS:", error);
         }
         try {
+            /* ClickSend SMS disabled - original fetch commented out
             const responseC = await fetch("/api/clickSendApi", {
             method: "POST",
             headers: {
@@ -288,11 +293,14 @@ useEffect(() => {
                  \n\nSincerely,\nLupon Tagapamayapa\nBarangay Fairview`
             })
         });
-
         
+
         if (!responseC.ok) throw new Error("Failed to send SMS");
         const dataC = await responseC.json();
         console.log(dataC);
+        */
+
+        console.log("ClickSend disabled: would send SMS to staff", staffContactNos);
         } catch (error) {
             console.error("Error sending SMS:", error);
         }

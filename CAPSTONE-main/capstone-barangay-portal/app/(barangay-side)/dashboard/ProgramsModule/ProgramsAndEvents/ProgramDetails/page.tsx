@@ -1119,6 +1119,7 @@ export default function ProgramDetails() {
       participantList.map(async (p) => {
         const smsBody = buildSmsBodyForParticipant(p);
         try {
+          /* ClickSend SMS disabled - original fetch commented out
           const response = await fetch("/api/clickSendApi", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1128,6 +1129,9 @@ export default function ProgramDetails() {
             }),
           });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          results.success++;
+          */
+          console.log("ClickSend disabled: would send SMS to", p.contactNumber);
           results.success++;
         } catch (err) {
           console.error(`❌ Failed to send SMS to ${p.fullName}:`, err);

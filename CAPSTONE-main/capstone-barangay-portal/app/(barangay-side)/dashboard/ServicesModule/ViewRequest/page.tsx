@@ -1838,28 +1838,32 @@ Functions for Reason for Reject
     };
 
     const handleSMS = async() => {
-        try{
-          const response = await fetch("/api/clickSendApi", {
-              method: "POST",
-              headers: {
-                  "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                  to: requestData?.contact,
-                  message: `Hello Mr/Ms. ${requestData?.requestor}, your 
-                  document request with ID ${requestData?.requestId} 
-                  is now ready for pick-up. Please visit the barangay hall 
-                  to collect your document. Thank you!`,
-              })
-          });
-          if (!response.ok) throw new Error("Failed to send SMS");
+      try{
+        /* ClickSend SMS disabled - original fetch commented out
+        const response = await fetch("/api/clickSendApi", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            to: requestData?.contact,
+            message: `Hello Mr/Ms. ${requestData?.requestor}, your 
+            document request with ID ${requestData?.requestId} 
+            is now ready for pick-up. Please visit the barangay hall 
+            to collect your document. Thank you!`,
+          })
+        });
+        if (!response.ok) throw new Error("Failed to send SMS");
 
-          const data = await response.json();
-          console.log(data);
-        }
-        catch(err) {
-          console.log(err);
-        }  
+        const data = await response.json();
+        console.log(data);
+        */
+
+        console.log("ClickSend disabled: would send SMS to", requestData?.contact);
+      }
+      catch(err) {
+        console.log(err);
+      }  
     };
   
     const [showReceivalForm, setShowReceivalForm] = useState(false);

@@ -723,7 +723,9 @@ const currentPrograms = sortedPrograms.slice(indexOfFirst, indexOfLast);
 
   const sendApprovedSMS = async (contactNumber: string, fullName: string, programName: string, role: string, timeStart: string) => {
     try {
-      const response = await fetch("/api/clickSendApi", {
+      // ClickSend disabled: would have posted to /api/clickSendApi
+      console.log("ClickSend disabled: would send approval SMS to", contactNumber, { fullName, programName, role, timeStart });
+      return; // short-circuit remaining original fetch code (left commented-out earlier)
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -807,7 +809,8 @@ const currentPrograms = sortedPrograms.slice(indexOfFirst, indexOfLast);
 
   const sendRejectionSMS = async (contactNumber: string, fullName: string, programName: string, reason: string, role:string ) => {
     try {
-      const response = await fetch("/api/clickSendApi", {
+      console.log("ClickSend disabled: would send rejection SMS to", contactNumber);
+      return;
         method: "POST",
         headers: {
           "Content-Type": "application/json",

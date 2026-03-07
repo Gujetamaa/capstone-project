@@ -233,6 +233,7 @@ export default function ViewOnlineReports() {
     let respondentContact = listOfStaffs.find(staff => staff.id === respondent.respondentName)?.phone;
     console.log("Respondent Contact:", respondentContact);
     try {
+      /* ClickSend SMS disabled - original fetch commented out
       const response = await fetch("/api/clickSendApi", {
         method: "POST",
         headers: {
@@ -247,9 +248,10 @@ export default function ViewOnlineReports() {
       if (!response.ok) {
         throw new Error("Failed to send SMS to assigned officer.");
       }
-      
+      */
+      console.log("ClickSend disabled: would send assignment SMS to", respondentContact);
     } catch (error) {
-      
+      console.error(error);
     }
 
 
