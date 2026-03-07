@@ -11,6 +11,7 @@ import {
   doc,
   deleteDoc,
   addDoc,
+
   orderBy,
   serverTimestamp,
 } from "firebase/firestore";
@@ -71,7 +72,6 @@ export default function ResidentModule() {
 
   // 🔽 History section: list of justification letters previously uploaded
   const [editJustifications, setEditJustifications] = useState<any[]>([]);
-
   const openPopup = (user: any) => {
     setSelectedUser(user);
     setViewActiveSection("basic");
@@ -485,11 +485,13 @@ export default function ResidentModule() {
     <main className="resident-module-main-container" /* edited this class*/>
       <div className="resident-module-section-1">
         {isAuthorized && (
-          <Link href="/dashboard/ResidentModule/AddResident">
-            <button className="add-announcement-btn add-incident-animated" onClick={handleAddResidentClick}>
-              Add New Resident
-            </button>
-          </Link>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <Link href="/dashboard/ResidentModule/AddResident">
+              <button className="add-announcement-btn add-incident-animated" onClick={handleAddResidentClick}>
+                Add New Resident
+              </button>
+            </Link>
+          </div>
         )}
       </div>
 

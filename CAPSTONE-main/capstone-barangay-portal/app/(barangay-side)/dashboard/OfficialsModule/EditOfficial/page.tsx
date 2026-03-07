@@ -461,10 +461,10 @@ export default function EditOfficial() {
 
               {activeSection === "others" && (
                 <div className="edit-official-others-mainsection">
-                  <div className="box-container-outer-resindentificationpic">
-                    <div className="title-resindentificationpic">Identification Picture</div>
+                  <div className="box-container-outer-residentificationpic">
+                    <div className="title-residentificationpic">Identification Picture</div>
 
-                    <div className="box-container-resindentificationpic">
+                    <div className="box-container-residentificationpic">
                       <div className="identificationpic-container">
                         <label htmlFor="identification-file-upload" className="upload-link">
                           Click to Upload File

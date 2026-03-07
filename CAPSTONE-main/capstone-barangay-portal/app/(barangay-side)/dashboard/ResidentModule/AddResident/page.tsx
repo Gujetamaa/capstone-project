@@ -466,7 +466,7 @@ export default function AddResident() {
 
       let identificationFileURL = "";
       if (identificationFile) {
-        const storageRef = ref(storage, `ResidentsFiles/IndentificationFile/${identificationFile.name}`);
+        const storageRef = ref(storage, `ResidentsFiles/identificationFile/${identificationFile.name}`);
         await uploadBytes(storageRef, identificationFile);
         identificationFileURL = await getDownloadURL(storageRef);
       }
@@ -1111,10 +1111,10 @@ export default function AddResident() {
                     </div>
 
                     <div className="add-main-resident-section-2-bottom-side">
-                      <div className="box-container-outer-resindentificationpic">
-                        <div className="title-resindentificationpic">Identification Picture</div>
+                      <div className="box-container-outer-residentificationpic">
+                        <div className="title-residentificationpic">Identification Picture</div>
 
-                        <div className="box-container-resindentificationpic">
+                        <div className="box-container-residentificationpic">
                           {/* File Upload Section */}
                           <div className="file-upload-container">
                             <label htmlFor="identification-file-upload" className="upload-link">

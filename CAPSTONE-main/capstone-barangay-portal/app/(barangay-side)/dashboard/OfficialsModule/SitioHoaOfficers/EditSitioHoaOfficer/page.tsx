@@ -572,12 +572,12 @@ const clusterOptions: Record<string, string[]> = {
                             {activeSection === "others" && (
                                 <>
                                     <div className="edit-officer-others-mainsection">
-                                        <div className="box-container-outer-resindentificationpic">
-                                            <div className="title-resindentificationpic">
+                                        <div className="box-container-outer-residentificationpic">
+                                            <div className="title-residentificationpic">
                                                 Identification Picture
                                             </div>
 
-                                            <div className="box-container-resindentificationpic">
+                                            <div className="box-container-residentificationpic">
 
                                             {/* File Upload Section */}
                                             <div className="identificationpic-container">

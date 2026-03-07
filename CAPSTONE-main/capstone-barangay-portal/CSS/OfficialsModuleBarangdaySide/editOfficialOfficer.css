@@ -272,14 +272,14 @@ html, body {
   width: 100%;
 }
 
-.box-container-outer-resindentificationpic,
-.box-container-outer-resindentificationpic {
+.box-container-outer-residentificationpic,
+.box-container-outer-residentificationpic {
   position: relative; 
   margin-top: 20px;
   margin-bottom: 20px;
 }
 
-.title-resindentificationpic {
+.title-residentificationpic {
   position: absolute;
   left: 10%; 
   top: 0; 
@@ -295,7 +295,7 @@ html, body {
   text-align: center;
 }
 
-.box-container-resindentificationpic {
+.box-container-residentificationpic {
   position: relative;
   width: 370px;
   border: 1px solid #5a6b7c;
@@ -313,7 +313,7 @@ html, body {
     align-items: center;
 }
 
-.box-container-resindentificationpic:hover {
+.box-container-residentificationpic:hover {
   background-color: rgba(245, 143, 88, 0.2);
 }
 

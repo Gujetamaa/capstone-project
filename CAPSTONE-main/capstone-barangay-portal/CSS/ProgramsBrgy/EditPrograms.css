@@ -456,7 +456,7 @@ animation: fadeSlideIn 0.5s ease-out;
   width: 60%;
 }
 
-.title-resindentificationpic {
+.title-residentificationpic {
   position: absolute;
   left: 25%; 
   top: 0; 
@@ -2226,7 +2226,7 @@ input:checked + .slider::before {
   text-align: center;
 }
 
-.box-container-resindentificationpic {
+.box-container-residentificationpic {
   position: relative;
   width: 370px;
   border: 1px solid #5a6b7c;
@@ -2243,7 +2243,7 @@ input:checked + .slider::before {
     align-items: center;
 }
 
-.box-container-resindentificationpic:hover {
+.box-container-residentificationpic:hover {
   background-color: rgba(245, 143, 88, 0.2);
 }
 

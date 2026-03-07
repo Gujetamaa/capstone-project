@@ -1267,7 +1267,7 @@ FOR ADDITION OF NEW MAIN RESIDENTS
 
 
 /* Resident Identification Pic Box */
-.box-container-resindentificationpic {
+.box-container-residentificationpic {
   position: relative;
   width: 370px;
   border: 1px solid #5a6b7c;
@@ -1284,7 +1284,7 @@ FOR ADDITION OF NEW MAIN RESIDENTS
     align-items: center;
 }
 
-.title-resindentificationpic {
+.title-residentificationpic {
   position: absolute;
   left: 10%; 
   top: 0; 
@@ -1300,12 +1300,12 @@ FOR ADDITION OF NEW MAIN RESIDENTS
   text-align: center;
 }
 
-.box-container-outer-resindentificationpic {
+.box-container-outer-residentificationpic {
   position: relative; 
   margin-bottom: 20px;
 }
 
-.box-container-resindentificationpic:hover {
+.box-container-residentificationpic:hover {
   background-color: rgba(245, 143, 88, 0.2);
 }
 
@@ -1402,7 +1402,7 @@ FOR ADDITION OF NEW MAIN RESIDENTS
   overflow: visible;
 }
 
-.box-container-resindentificationpic:hover {
+.box-container-residentificationpic:hover {
   background-color: rgba(245, 143, 88, 0.2);
 }
 

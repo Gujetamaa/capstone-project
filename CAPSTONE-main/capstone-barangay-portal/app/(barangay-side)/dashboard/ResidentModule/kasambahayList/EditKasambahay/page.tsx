@@ -870,12 +870,12 @@ export default function EditKasambahay() {
                     </div>
 
                     <div className="add-main-resident-section-2-bottom-side">
-                      <div className="box-container-outer-resindentificationpic">
-                        <div className="title-resindentificationpic">
+                      <div className="box-container-outer-residentificationpic">
+                        <div className="title-residentificationpic">
                           Identification Picture
                         </div>
 
-                        <div className="box-container-resindentificationpic">
+                        <div className="box-container-residentificationpic">
                           <div className="identificationpic-container" style={disabledStyle("identificationFile")}>
                             <label
                               htmlFor="identification-file-upload"

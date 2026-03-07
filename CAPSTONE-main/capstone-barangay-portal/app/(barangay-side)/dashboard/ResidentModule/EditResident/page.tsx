@@ -1347,10 +1347,10 @@ if (name === "isPWD") {
                     </div>
 
                     <div className="add-main-resident-section-2-bottom-side">
-                      <div className="box-container-outer-resindentificationpic">
-                        <div className="title-resindentificationpic">Identification Picture</div>
+                      <div className="box-container-outer-residentificationpic">
+                        <div className="title-residentificationpic">Identification Picture</div>
 
-                        <div className="box-container-resindentificationpic">
+                        <div className="box-container-residentificationpic">
                           {/* File Upload Section */}
                           <div className="identificationpic-container">
                             <label htmlFor="identification-file-upload" className="upload-link">

@@ -1161,7 +1161,7 @@ const isDayDisabledByPrior = (idx: number): { disabled: boolean; reason?: string
                           >
                             <div className="title-walkin-requirements">{formattedLabel}</div>
 
-                            <div className="box-container-resindentificationpic">
+                            <div className="box-container-residentificationpic">
                               <div className="file-upload-container">
                                 <label htmlFor={`file-${name}`} className="upload-link" style={{ cursor: "pointer" }}>
                                   {hasManual ? "Replace File" : "Click to Upload File"}
