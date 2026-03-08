@@ -505,6 +505,7 @@ const handleDeliveryChange: React.ChangeEventHandler<HTMLInputElement> = (e) => 
 
       const responseB = { ok: true, json: async () => ({ disabled: true }) } as any;
 
+      /* ClickSend SMS disabled - original fetch commented out
       const responseC = await fetch("/api/clickSendApi", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -518,6 +519,9 @@ const handleDeliveryChange: React.ChangeEventHandler<HTMLInputElement> = (e) => 
                 \n\nSincerely,\nLupon Tagapamayapa\nBarangay Fairview`,
         }),
       });
+      */
+
+      const responseC = { ok: true, json: async () => ({ disabled: true }) } as any;
       const dataC = await responseC.json();
       if (!responseC.ok) throw new Error("Failed to send SMS");
 
