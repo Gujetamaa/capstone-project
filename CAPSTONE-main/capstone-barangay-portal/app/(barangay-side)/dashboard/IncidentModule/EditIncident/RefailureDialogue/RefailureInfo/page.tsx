@@ -211,7 +211,6 @@ export default function RefailureInfo() {
 
     const handleSMSNotification = async () => {
         try{
-          /* ClickSend SMS disabled - original fetch commented out
           const response = await fetch("/api/clickSendApi", {
               method: "POST",
               headers: {
@@ -232,15 +231,11 @@ export default function RefailureInfo() {
   
           const data = await response.json();
           console.log(data);
-          */
-
-          console.log("ClickSend disabled: SMS to respondent would be:", reportData?.respondent?.contact);
         } catch (error) {
             console.error("Error sending SMS:", error);
         }
         
         try {
-            /* ClickSend SMS disabled - original fetch commented out
             const responseC = await fetch("/api/clickSendApi", {
             method: "POST",
             headers: {
@@ -258,13 +253,9 @@ export default function RefailureInfo() {
             })
 
         });
-
         if (!responseC.ok) throw new Error("Failed to send SMS");
         const dataC = await responseC.json();
         console.log(dataC);
-        */
-
-        console.log("ClickSend disabled: SMS to staff would be:", staffContactNos);
         } catch (error) {
             console.error("Error sending SMS:", error);
         }

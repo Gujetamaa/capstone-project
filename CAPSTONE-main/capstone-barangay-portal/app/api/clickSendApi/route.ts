@@ -7,7 +7,6 @@ export async function POST(req: NextRequest) {
         const apiUsername = process.env.CLICKSEND_USERNAME;
         const apiKey = process.env.CLICKSEND_API_KEY;
 
-        /* ClickSend SMS sending disabled by comment (safety)
         const response = await fetch("https://rest.clicksend.com/v3/sms/send", {
             method: "POST",
             headers: {
@@ -27,11 +26,6 @@ export async function POST(req: NextRequest) {
         }
 
         return NextResponse.json({ success: true, data });
-        */
-
-        // Mocked response while ClickSend is disabled
-        console.log("📩 ClickSend disabled: SMS not sent. to=", to, "message=", message);
-        return NextResponse.json({ success: true, data: { disabled: true, to, message } });
 
     } catch (error: any) {
         console.error("❌ SMS Error:", error.message);
